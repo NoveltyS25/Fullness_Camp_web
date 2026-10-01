@@ -14,6 +14,8 @@ export interface Coupon {
    * true: el bono se suma al descuento por pago único.
    */
   stackable?: boolean;
+  /** Categorías donde aplica. Sin este campo aplica a todo el catálogo. */
+  categories?: ("certificacion" | "taller" | "retiro" | "clases")[];
 }
 
 export const coupons: Coupon[] = [

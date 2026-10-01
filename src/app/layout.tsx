@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Roboto, Roboto_Slab } from "next/font/google";
+import { CartProvider } from "@/lib/cart";
 import "./globals.css";
 
 const roboto = Roboto({
@@ -33,7 +34,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="es" className={`${roboto.variable} ${robotoSlab.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col"><CartProvider>{children}</CartProvider></body>
     </html>
   );
 }

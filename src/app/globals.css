@@ -1,23 +1,96 @@
 @import "tailwindcss";
 
+/* Colores tomados del logo: terracota rosado y marrón. */
 :root {
   --clay: #c9857a;
-  --clay-dark: #7a4a45;
-  --sand: #fbf3ef;
-  --ink: #3b2523;
+  --clay-soft: #f1ddd8;
+  --clay-dark: #7a4a45; /* texto blanco sobre este color: contraste alto */
+  --sand: #fbf6f3;
+  --ink: #3b2523; /* texto principal */
+  --muted: #5d4542; /* texto secundario, sigue siendo legible */
 }
 
 @theme inline {
   --color-clay: var(--clay);
+  --color-clay-soft: var(--clay-soft);
   --color-clay-dark: var(--clay-dark);
   --color-sand: var(--sand);
   --color-ink: var(--ink);
+  --color-muted: var(--muted);
   --font-sans: var(--font-roboto), system-ui, sans-serif;
   --font-serif: var(--font-roboto-slab), Georgia, serif;
+}
+
+/* Letra grande: 18px en celular y 20px en computador. Todo el diseño usa rem, así que escala junto. */
+html {
+  font-size: 112.5%;
+  scroll-behavior: smooth;
+}
+@media (min-width: 1024px) {
+  html {
+    font-size: 125%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 body {
   background: var(--sand);
   color: var(--ink);
   font-family: var(--font-sans);
+  line-height: 1.7;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  color: var(--clay-dark);
+  line-height: 1.25;
+}
+
+a {
+  text-underline-offset: 0.2em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--clay-dark);
+  outline-offset: 3px;
+}
+
+/* Botones: zona táctil grande (mínimo 3.5rem de alto). */
+.btn {
+  display: inline-flex;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  border-radius: 9999px;
+  padding: 0.75rem 1.75rem;
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+.btn-primary {
+  background: var(--clay-dark);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: var(--ink);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--clay-dark);
+  border: 2px solid var(--clay-dark);
+}
+.btn-secondary:hover {
+  background: var(--clay-soft);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

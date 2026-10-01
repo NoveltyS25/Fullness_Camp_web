@@ -28,7 +28,7 @@ se muestra en el sitio pero no se puede comprar.
 ## Reglas de pago ya definidas
 
 - Se paga el valor **completo en un solo pago**, con tarjeta. Quien quiera cuotas las pide a su banco.
-- Descuento automático de **15%** por pago único. Está en `PAY_IN_FULL_PERCENT` de [src/lib/pricing.ts](../src/lib/pricing.ts).
+- Descuento automático por pago único: **15%** certificaciones, **10%** talleres, **retiros sin descuento automático** (solo con cupón). Está en `PAY_IN_FULL_PERCENT` de [src/lib/pricing.ts](../src/lib/pricing.ts).
 - Bono promocional genérico `BONO-PROMO` (15%), activo y sin fechas. Por defecto **no se suma** al 15% automático:
   el cliente recibe el mayor de los dos. Para que se sume, se pone `stackable: true`.
 - Pago en dólares por equivalencia del valor en pesos, con la tasa de la variable `USD_COP_RATE`.
@@ -39,5 +39,4 @@ se muestra en el sitio pero no se puede comprar.
 - Políticas legales (términos, privacidad, reembolsos y cancelación): las enviará el equipo.
 - Nombre legal: hoy es "Fullnes Camp International" en [src/lib/brand.ts](../src/lib/brand.ts); se ajusta con las políticas.
 - Confirmar el aval que se mostrará: Yoga Alliance (RYS 200) o "Yoga Inbound Alliance", porque los PDF mencionan ambos.
-- Si el 15% por pago único aplica también a los retiros y al taller, o solo a las certificaciones.
 - Cuenta de Bold: llaves de API y si permite cobrar en USD.
