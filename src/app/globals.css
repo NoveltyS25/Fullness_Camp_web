@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  --clay: #c9857a;
+  --clay-dark: #7a4a45;
+  --sand: #fbf3ef;
+  --ink: #3b2523;
+}
+
+@theme inline {
+  --color-clay: var(--clay);
+  --color-clay-dark: var(--clay-dark);
+  --color-sand: var(--sand);
+  --color-ink: var(--ink);
+  --font-sans: var(--font-roboto), system-ui, sans-serif;
+  --font-serif: var(--font-roboto-slab), Georgia, serif;
+}
+
+body {
+  background: var(--sand);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
