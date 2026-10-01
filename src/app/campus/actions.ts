@@ -8,7 +8,7 @@ import { canTeach, getCurrentProfile } from "@/lib/campus/auth";
 import { processPendingDeliveries } from "@/lib/campus/dispatch";
 import { normalizeWhatsapp } from "@/lib/campus/phone";
 import { fromLocalInput } from "@/lib/campus/time";
-import { siteUrl } from "@/lib/supabase/config";
+import { isSupabaseConfigured, siteUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 export interface FormState {
@@ -21,6 +21,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function sendMagicLink(_prev: FormState, formData: FormData): Promise<FormState> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido." };
+  if (!isSupabaseConfigured()) return { error: "El campus se está configurando. Inténtalo más tarde." };
 
   const origin = (await headers()).get("origin") ?? siteUrl();
   const supabase = await createClient();

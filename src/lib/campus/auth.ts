@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { isSupabaseConfigured } from "../supabase/config";
 import { createClient } from "../supabase/server";
 
 export interface Profile {
@@ -13,6 +14,7 @@ export interface Profile {
 
 /** Usuaria actual y su perfil; null si no ha iniciado sesión. getUser() valida el token con Supabase. */
 export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
+  if (!isSupabaseConfigured()) return null;
   const supabase = await createClient();
   const {
     data: { user },

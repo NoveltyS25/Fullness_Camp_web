@@ -7,7 +7,8 @@ aviso en la plataforma y, según sus preferencias, por correo y por WhatsApp.
 ## 1. Crear el proyecto en Supabase (una sola vez)
 
 1. Crear una cuenta y un proyecto en https://supabase.com (región cercana, por ejemplo São Paulo).
-2. En **SQL Editor** pegar todo [supabase/migrations/0001_campus.sql](../supabase/migrations/0001_campus.sql) y pulsar **Run**.
+2. En **SQL Editor** pegar y ejecutar (**Run**), en este orden, los dos archivos:
+   [0001_campus.sql](../supabase/migrations/0001_campus.sql) y luego [0002_admin.sql](../supabase/migrations/0002_admin.sql).
 3. En **Project Settings → API** copiar:
    - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
    - Publishable (anon) key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -37,32 +38,25 @@ Las llaves van en `.env.local` (en tu equipo) y en las variables de entorno del 
 Mientras Resend o WhatsApp no estén configurados, el cambio de horario igual se guarda y se avisa dentro de la
 plataforma; los envíos externos quedan marcados como "omitidos".
 
-## 4. Crear profesoras, cohortes, inscripciones y clases
+## 4. Primera administradora y panel de administración
 
-Por ahora esto se hace en el **SQL Editor** de Supabase (el panel de administración vendrá después y,
-cuando esté el pago con Bold, las inscripciones se harán solas al pagar).
+La primera administradora se crea **una sola vez** con SQL. Antes, esa persona debe entrar una vez al campus
+(`/campus/ingresar`) con su correo para que exista su perfil:
 
 ```sql
--- Hacer profesora (la persona ya debe haber entrado una vez al campus con su correo)
-update profiles set role = 'teacher', full_name = 'Lila Góvardhan' where email = 'profesora@correo.com';
--- Hacer administradora
-update profiles set role = 'admin' where email = 'admin@correo.com';
-
--- Crear una cohorte con su profesora
-insert into cohorts (program_slug, name, sede, teacher_id, starts_on)
-select 'hatha-vinyasa-yoga-y-meditacion', 'Hatha Vinyasa 300h - Bogotá 2026', 'Bogotá', id, '2026-11-03'
-from profiles where email = 'profesora@correo.com';
-
--- Inscribir una estudiante
-insert into enrollments (cohort_id, student_id)
-select c.id, p.id from cohorts c, profiles p
-where c.name = 'Hatha Vinyasa 300h - Bogotá 2026' and p.email = 'estudiante@correo.com';
-
--- Programar una clase (la hora va en UTC: 6:00 p. m. de Colombia = 23:00 UTC)
-insert into sessions (cohort_id, title, starts_at, ends_at, location)
-select id, 'Módulo 1: Fundamentos', '2026-11-03T23:00:00Z', '2026-11-04T01:00:00Z', 'Sede Bogotá'
-from cohorts where name = 'Hatha Vinyasa 300h - Bogotá 2026';
+update profiles set role = 'admin', full_name = 'Nombre Apellido' where email = 'admin@correo.com';
 ```
+
+Desde ahí todo se hace en **/campus/admin**, sin SQL:
+
+- **Profesoras y administradoras:** dar o quitar el rol por correo (la persona debe haber entrado antes al campus).
+- **Cohortes:** crear una por programa, sede y profesora.
+- **Clases:** en cada cohorte, crear una clase o repetirla cada semana (por ejemplo 12 semanas) a la misma hora de Colombia.
+- **Estudiantes:** inscribir por correo y poner la inscripción en activa, pausada o cancelada. Las pausadas y
+  canceladas no reciben avisos.
+- Una clase creada se puede mover o cancelar con **Cambiar horario**, y eso avisa a las inscritas.
+
+Cuando esté el pago con Bold, las inscripciones se harán solas al pagar.
 
 ## 5. Reintentos de envíos
 
@@ -73,6 +67,6 @@ Si un correo o WhatsApp falla, se reintenta hasta 3 veces. Un cron debe llamar a
 ## Pruebas
 
 - `npm test`: precios, mensajes, horas de Colombia y teléfonos.
-- `npm run test:db`: levanta un PostgreSQL en memoria, aplica la migración y verifica 31 reglas de seguridad
-  y del cambio de horario (quién ve qué, que una estudiante no pueda volverse administradora, que solo la
+- `npm run test:db`: levanta un PostgreSQL en memoria, aplica las migraciones y verifica 39 reglas de seguridad,
+  de roles y del cambio de horario (quién ve qué, que una estudiante no pueda volverse administradora, que solo la
   profesora de la cohorte cambie sus clases, quién recibe aviso y por qué canal).

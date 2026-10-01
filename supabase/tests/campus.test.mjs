@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const db = new PGlite();
-const migration = readFileSync(new URL("../migrations/0001_campus.sql", import.meta.url), "utf8")
+const migration = ["0001_campus.sql", "0002_admin.sql"]
+  .map((f) => readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"))
+  .join("\n")
   .replace(/create extension if not exists "pgcrypto";/, ""); // gen_random_uuid ya es nativo
 
 // Simula lo que Supabase ya trae: roles, esquema auth y permisos por defecto.
@@ -99,5 +101,23 @@ assert.equal(after[0].n, 1); ok("Una inscripción pausada no recibe avisos");
 
 const admin = await as("admin", () => q("select reschedule_session($1,$2,$3,null,null,'scheduled','Ajuste de admin') as n", [sB, "2030-10-09T23:00Z", "2030-10-10T01:00Z"]));
 assert.equal(admin[0].n, 1); ok("Admin puede cambiar cualquier sesión");
+
+// ---- roles (migración 0002)
+await as("s1", () => fails(() => q("select admin_set_role('s2@x.co','teacher')"), "estudiante cambia rol")); ok("Estudiante NO puede cambiar roles");
+await as("teacher", () => fails(() => q("select admin_set_role('s2@x.co','admin')"), "profesora cambia rol")); ok("Profesora NO puede cambiar roles");
+await as("admin", () => q("select admin_set_role('S2@X.co','teacher')"));
+assert.equal((await q("select role from profiles where email='s2@x.co'"))[0].role, "teacher"); ok("Admin da el rol de profesora (sin importar mayúsculas)");
+await as("admin", () => fails(() => q("select admin_set_role('admin@x.co','student')"), "auto-degradación")); ok("Admin NO puede quitarse su propio rol");
+await as("admin", () => fails(() => q("select admin_set_role('nadie@x.co','teacher')"), "correo inexistente")); ok("Un correo que no ha entrado al campus se rechaza");
+
+// ---- el panel de administración escribe directo con las políticas de admin
+await as("admin", async () => {
+  const c = (await q("insert into cohorts (program_slug,name,sede) values ('p','C','Online') returning id"))[0].id;
+  await q("insert into sessions (cohort_id,title,starts_at,ends_at) values ($1,'x','2031-01-01T10:00Z','2031-01-01T11:00Z')", [c]);
+  await q("insert into enrollments (cohort_id,student_id) values ($1,$2)", [c, ids.s1]);
+});
+ok("Admin crea cohorte, clase e inscripción");
+await as("s1", () => fails(() => q("insert into cohorts (program_slug,name,sede) values ('p','H','Online')"), "estudiante crea cohorte")); ok("Estudiante NO crea cohortes");
+await as("teacher", () => fails(() => q("insert into enrollments (cohort_id,student_id) values ($1,$2)", [cohortA, ids.s3]), "profesora inscribe")); ok("Profesora NO inscribe estudiantes");
 
 console.log(`\nTodas las pruebas de base de datos pasaron (${n}).`);

@@ -5,7 +5,9 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./config";
 /** Cliente de Supabase para Server Components y Server Actions, con la sesión de la usuaria. */
 export async function createClient() {
   const cookieStore = await cookies();
-  return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  // Sin llaves (campus sin configurar) las páginas se renderizan en paralelo con el layout que redirige;
+  // con valores de relleno el cliente no falla y sus consultas simplemente devuelven error/vacío.
+  return createServerClient(SUPABASE_URL || "http://localhost:54321", SUPABASE_ANON_KEY || "sin-configurar", {
     cookies: {
       getAll() {
         return cookieStore.getAll();

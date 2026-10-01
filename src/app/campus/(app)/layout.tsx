@@ -36,6 +36,7 @@ export default async function CampusLayout({ children }: LayoutProps<"/campus">)
           <nav aria-label="Campus" className="flex flex-wrap items-center gap-1">
             <Link href="/campus" className={pill}>Mi horario</Link>
             {canTeach(profile) && <Link href="/campus/profesor" className={pill}>Mis clases</Link>}
+            {profile.role === "admin" && <Link href="/campus/admin" className={pill}>Administración</Link>}
             <Link href="/campus/avisos" className={pill}>
               Avisos
               {!!count && <span className="ml-2 grid h-7 min-w-7 place-items-center rounded-full bg-clay-dark px-1.5 text-sm text-white">{count}</span>}
