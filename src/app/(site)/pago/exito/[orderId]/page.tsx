@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClearCartOnMount } from "@/components/ClearCartOnMount";
+import { ScrollTop } from "@/components/ScrollTop";
 import { formatCOP } from "@/lib/pricing";
 import { getDb } from "@/server/db";
 import { getOrder, getOrderItems } from "@/server/orders";
@@ -47,7 +48,8 @@ export default async function PagoExito(props: PageProps<"/pago/exito/[orderId]"
 
   return (
     <main className="mx-auto max-w-2xl px-5 py-12">
-      <ClearCartOnMount />
+      <ScrollTop />
+      <ClearCartOnMount orderId={order.id} total={order.total} items={items.map((i) => ({ slug: i.program_slug, title: i.title, price: i.total }))} />
       <div className="mb-8 text-center">
         <p className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-clay-dark text-3xl text-white" aria-hidden="true">✓</p>
         <h1 className="mb-2 text-4xl font-bold">¡Pago recibido!</h1>
@@ -66,9 +68,9 @@ export default async function PagoExito(props: PageProps<"/pago/exito/[orderId]"
       <section aria-labelledby="pasos" className="rounded-3xl bg-clay-soft p-6">
         <h2 id="pasos" className="mb-4 text-2xl font-bold">Ahora, entra a tu campus virtual</h2>
         <ol className="space-y-4 text-lg">
-          <li className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clay-dark font-bold text-white">1</span><span><strong>Revisa tu correo</strong> ({maskEmail(order.buyer_email)}). Te enviamos el paso a paso y una contraseña temporal. Si no lo ves, mira en spam.</span></li>
-          <li className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clay-dark font-bold text-white">2</span><span><strong>Entra con tu cédula</strong> y la contraseña temporal.</span></li>
-          <li className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clay-dark font-bold text-white">3</span><span><strong>Crea tu propia contraseña.</strong> Es solo la primera vez.</span></li>
+          <li className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clay-dark font-bold text-white">1</span><span><strong>Revisa tu correo</strong> ({maskEmail(order.buyer_email)}). Te enviamos el paso a paso y un enlace para crear tu contraseña. Si no lo ves, mira en spam.</span></li>
+          <li className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clay-dark font-bold text-white">2</span><span><strong>Crea tu contraseña</strong> con el enlace del correo.</span></li>
+          <li className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-clay-dark font-bold text-white">3</span><span><strong>Entra con tu cédula</strong> y la contraseña que creaste, en «Campus virtual».</span></li>
         </ol>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Link href="/campus/ingresar" className="btn btn-primary">Ir al campus virtual</Link>

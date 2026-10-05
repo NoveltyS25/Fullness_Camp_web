@@ -75,7 +75,7 @@ test("el precio del pedido se calcula en el servidor", async () => {
   assert.equal(vacio.ok, false);
 });
 
-test("pagar crea la cuenta, inscribe, asigna grupo y manda el paso a paso", async () => {
+test("pagar crea la cuenta, inscribe, asigna grupo y manda el enlace para crear la contraseña", async () => {
   const db = await setup();
   const r = await createOrder(db, buyer, [SLUG], null, "demo");
   assert.ok(r.ok);
@@ -89,7 +89,7 @@ test("pagar crea la cuenta, inscribe, asigna grupo y manda el paso a paso", asyn
 
   const user = await findUserByCedula(db, buyer.cedula);
   assert.ok(user);
-  assert.equal(user.must_change_password, 1);
+  assert.equal(user.must_change_password, 1); // aún no ha creado su contraseña
   assert.equal(user.email, "maria@example.com");
 
   const enr = await db.all<{ status: string; cohort_id: string | null }>("SELECT status, cohort_id FROM enrollments WHERE user_id = ?", [user.id]);
@@ -98,17 +98,26 @@ test("pagar crea la cuenta, inscribe, asigna grupo y manda el paso a paso", asyn
   assert.ok(enr[0].cohort_id, "debe quedar en el grupo abierto");
   assert.equal((await getOrder(db, r.orderId))?.status, "paid");
 
-  // El correo trae la cédula, una contraseña temporal que SÍ sirve para entrar, y los pasos.
+  // El correo trae la cédula, un enlace para crear la contraseña, y los pasos.
   const mail = await lastEmail(db, buyer.email);
   assert.ok(mail);
   assert.match(mail.subject, /Bienvenida/);
   assert.match(mail.body_text, new RegExp(buyer.cedula));
-  assert.match(mail.body_text, /crear una contraseña nueva/);
-  const temp = /contraseña temporal: (\S+)/.exec(mail.body_text)?.[1];
-  assert.ok(temp);
-  const entrada = await login(db, buyer.cedula, temp, "9.9.9.9");
+  assert.ok(!/temporal/.test(mail.body_text), "ya no se envía una contraseña por correo");
+  const token = /restablecer\?token=([\w-]+)/.exec(mail.body_text)?.[1];
+  assert.ok(token, "el correo trae el enlace para crear la contraseña");
+
+  // Sin crear la contraseña no se puede entrar (la cuenta nace con una clave que nadie conoce).
+  assert.equal((await login(db, buyer.cedula, "cualquiera123", "9.9.9.9")).ok, false);
+
+  // Con el enlace crea la suya (una sola vez) y entra.
+  const userId = await consumePasswordReset(db, token);
+  assert.equal(userId, user.id);
+  assert.equal(await consumePasswordReset(db, token), undefined);
+  await setPassword(db, user.id, "MiClaveNueva26");
+  const entrada = await login(db, buyer.cedula, "MiClaveNueva26", "9.9.9.9");
   assert.ok(entrada.ok);
-  if (entrada.ok) assert.equal(entrada.user.must_change_password, 1); // primer ingreso: debe cambiarla
+  if (entrada.ok) assert.equal(entrada.user.must_change_password, 0);
 });
 
 test("confirmar el mismo pago dos veces no duplica nada", async () => {
@@ -183,4 +192,52 @@ test("el enlace para recuperar la contraseña sirve una sola vez", async () => {
   assert.equal(await consumePasswordReset(db, token), u.id);
   assert.equal(await consumePasswordReset(db, token), undefined);
   assert.equal(await consumePasswordReset(db, "inventado"), undefined);
+});
+
+// ---------------------------------------------------------------- interesadas (leads) y atribución
+
+import { cleanAttribution, createLead, listLeads } from "./leads.ts";
+
+const lead = { programSlug: "hatha-vinyasa-yoga-y-meditacion", fullName: "Laura Mejía", email: "Laura@Example.com", whatsapp: "573001234567", interest: "info" as const, attribution: null, ip: "1.2.3.4" };
+
+test("una persona interesada queda guardada con su correo en minúsculas", async () => {
+  const db = await setup();
+  assert.deepEqual(await createLead(db, lead), { ok: true, duplicate: false });
+  const rows = await listLeads(db);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].email, "laura@example.com");
+});
+
+test("enviar dos veces lo mismo el mismo día no duplica la interesada", async () => {
+  const db = await setup();
+  await createLead(db, lead);
+  assert.deepEqual(await createLead(db, lead), { ok: true, duplicate: true });
+  assert.equal((await listLeads(db)).length, 1);
+  // pero otro interés (lista de espera) sí es una solicitud distinta
+  assert.deepEqual(await createLead(db, { ...lead, interest: "waitlist" }), { ok: true, duplicate: false });
+});
+
+test("una misma conexión no puede llenar la lista de spam: máximo 5 por hora", async () => {
+  const db = await setup();
+  for (let i = 0; i < 5; i++) assert.equal((await createLead(db, { ...lead, email: `p${i}@x.co` })).ok, true);
+  assert.deepEqual(await createLead(db, { ...lead, email: "p6@x.co" }), { ok: false, error: "rate-limited" });
+  assert.equal((await createLead(db, { ...lead, email: "otra@x.co", ip: "9.9.9.9" })).ok, true); // otra conexión sí
+});
+
+test("la atribución solo guarda texto corto y sencillo", () => {
+  assert.equal(cleanAttribution('{"utm_source":"instagram","utm_campaign":"oct26"}'), '{"utm_source":"instagram","utm_campaign":"oct26"}');
+  assert.equal(cleanAttribution("no es json"), null);
+  assert.equal(cleanAttribution("[1,2]"), null);
+  assert.equal(cleanAttribution(null), null);
+  assert.equal(cleanAttribution("x".repeat(1000)), null);
+  const limpio = JSON.parse(cleanAttribution('{"utm_source":"a","<script>":"x","utm_term":{"a":1}}') ?? "{}");
+  assert.deepEqual(limpio, { utm_source: "a" }); // claves raras y valores que no son texto se descartan
+});
+
+test("el pedido guarda la campaña de origen", async () => {
+  const db = await setup();
+  const r = await createOrder(db, buyer, [SLUG], null, "demo", '{"utm_source":"google","utm_medium":"cpc"}');
+  if (!r.ok) return assert.fail();
+  const o = await db.get<{ attribution: string }>("SELECT attribution FROM orders WHERE id = ?", [r.orderId]);
+  assert.match(o?.attribution ?? "", /google/);
 });

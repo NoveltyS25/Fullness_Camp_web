@@ -9,10 +9,12 @@
     "lint": "eslint",
     "test": "node --test src/lib/*.test.ts src/lib/campus/*.test.ts src/server/*.test.ts",
     "db:seed": "node scripts/seed-demo.ts",
-    "db:reset": "node scripts/seed-demo.ts --reset"
+    "db:reset": "node scripts/seed-demo.ts --reset",
+    "demo": "npm run build && next start -p 3000"
   },
   "dependencies": {
     "next": "16.3.8",
+    "page-flip": "^2.0.7",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

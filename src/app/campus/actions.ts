@@ -93,7 +93,7 @@ export async function resetPasswordAction(_prev: FormState, fd: FormData): Promi
     redirect(`/campus/restablecer?token=${again}&error=${encodeURIComponent(problem)}`);
   }
   await setPassword(db, userId, next);
-  redirect("/campus/ingresar?clave=ok");
+  redirect(`/campus/ingresar?clave=ok&cedula=${row?.cedula ?? ""}`);
 }
 
 export async function updateProfileAction(_prev: FormState, fd: FormData): Promise<FormState> {

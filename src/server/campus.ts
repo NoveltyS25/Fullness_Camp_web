@@ -1,6 +1,7 @@
 import { emailContent, greeting, whatsappSummary, type ChangeContext, type SessionData } from "../lib/campus/messages.ts";
 import { newId, nowIso, type Db } from "./db/index.ts";
 import { sendEmail, sendWhatsapp } from "./outbox.ts";
+import { createSetupLink } from "./auth.ts";
 import { generateTempPassword, hashPassword } from "./security.ts";
 import { manualAccountEmail } from "./templates.ts";
 import { findUserByCedula, type Role, type User } from "./users.ts";
@@ -389,8 +390,7 @@ export async function enrollManual(
   const existing = await findUserByCedula(db, e.cedula);
   if (!existing && (!e.fullName || !e.email)) return { ok: false, error: "Esa cédula no tiene cuenta: escribe también el nombre y el correo para crearla." };
 
-  const temp = generateTempPassword();
-  const hash = existing ? "" : await hashPassword(temp);
+  const hash = existing ? "" : await hashPassword(generateTempPassword(24));
   const userId = existing?.id ?? newId();
 
   await db.transaction(async (tx) => {
@@ -411,7 +411,7 @@ export async function enrollManual(
   });
 
   if (!existing) {
-    await sendEmail(db, { to: e.email.toLowerCase(), ...manualAccountEmail({ fullName: e.fullName, cedula: e.cedula, tempPassword: temp, programTitle: cohort.name, loginUrl: `${baseUrl}/campus/ingresar` }) });
+    await sendEmail(db, { to: e.email.toLowerCase(), ...manualAccountEmail({ fullName: e.fullName, cedula: e.cedula, setPasswordUrl: await createSetupLink(db, userId, baseUrl), programTitle: cohort.name, loginUrl: `${baseUrl}/campus/ingresar`, recoverUrl: `${baseUrl}/campus/recuperar` }) });
   }
   return { ok: true, created: !existing };
 }
@@ -435,15 +435,15 @@ export async function createStaffAccount(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (actor.role !== "admin") return { ok: false, error: "Solo una administradora puede crear cuentas." };
   if (await findUserByCedula(db, s.cedula)) return { ok: false, error: "Ya existe una cuenta con esa cédula. Cambia su rol en la lista." };
-  const temp = generateTempPassword();
-  const hash = await hashPassword(temp);
+  const hash = await hashPassword(generateTempPassword(24));
+  const userId = newId();
   await db.run(
     `INSERT INTO users (id, cedula, full_name, email, role, password_hash, must_change_password, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
-    [newId(), s.cedula, s.fullName, s.email.toLowerCase(), s.role, hash, nowIso()],
+    [userId, s.cedula, s.fullName, s.email.toLowerCase(), s.role, hash, nowIso()],
   );
   await sendEmail(db, {
     to: s.email.toLowerCase(),
-    ...manualAccountEmail({ fullName: s.fullName, cedula: s.cedula, tempPassword: temp, programTitle: null, loginUrl: `${baseUrl}/campus/ingresar` }),
+    ...manualAccountEmail({ fullName: s.fullName, cedula: s.cedula, setPasswordUrl: await createSetupLink(db, userId, baseUrl), programTitle: null, loginUrl: `${baseUrl}/campus/ingresar`, recoverUrl: `${baseUrl}/campus/recuperar` }),
   });
   return { ok: true };
 }

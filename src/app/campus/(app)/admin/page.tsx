@@ -20,7 +20,10 @@ export default async function Admin() {
 
   return (
     <div className="space-y-14">
-      <h1 className="text-3xl font-bold sm:text-4xl">Administración</h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-3xl font-bold sm:text-4xl">Administración</h1>
+        <Link href="/campus/admin/interesadas" className="btn btn-secondary">Personas interesadas</Link>
+      </div>
 
       <section aria-labelledby="cohortes">
         <h2 id="cohortes" className="mb-4 text-2xl font-bold">Cohortes</h2>

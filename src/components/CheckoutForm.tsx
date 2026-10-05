@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { submitWith } from "@/lib/form";
 import { startCheckoutAction, type CheckoutState } from "@/app/(site)/checkout/actions";
+import { TrackEvent } from "@/components/landing/TrackEvent";
+import { track } from "@/lib/analytics";
+import { readAttribution } from "@/lib/attribution";
 import { useCart } from "@/lib/cart";
 import { formatCOP } from "@/lib/pricing";
 
@@ -11,8 +14,8 @@ const input = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-
 
 const steps = [
   { n: 1, t: "Pagas con tarjeta", d: "En una página segura de pago." },
-  { n: 2, t: "Te llega un correo", d: "Con el paso a paso para entrar al campus virtual." },
-  { n: 3, t: "Entras con tu cédula", d: "Creas tu propia contraseña y ves tus clases." },
+  { n: 2, t: "Te llega un correo", d: "Con un enlace para crear tu contraseña y el paso a paso." },
+  { n: 3, t: "Entras con tu cédula", d: "Y con la contraseña que creaste ves tus clases." },
 ];
 
 export function CheckoutForm() {
@@ -30,7 +33,17 @@ export function CheckoutForm() {
 
   return (
     <div className="grid gap-10 lg:grid-cols-[1fr_22rem]">
-      <form onSubmit={submitWith(action)} className="space-y-6">
+      <form
+        onSubmit={submitWith(action, (fd) => {
+          fd.set("attribution", readAttribution());
+          track("add_payment_info", { currency: "COP", value: quote.total });
+        })}
+        className="space-y-6"
+      >
+        <TrackEvent
+          event="begin_checkout"
+          params={{ currency: "COP", value: quote.total, items: quote.lines.map((l) => ({ item_id: l.slug, item_name: l.title, price: l.total })) }}
+        />
         <input type="hidden" name="slugs" value={JSON.stringify(slugs)} />
         <input type="hidden" name="coupon" value={couponCode} />
 

@@ -36,7 +36,7 @@ export async function startCheckoutAction(_prev: CheckoutState, fd: FormData): P
   }
 
   // El precio SIEMPRE se calcula en el servidor con el catálogo; del navegador solo llegan los identificadores.
-  const result = await createOrder(getDb(), { cedula, name, email, phone }, slugs, text(fd, "coupon") || null, paymentProvider());
+  const result = await createOrder(getDb(), { cedula, name, email, phone }, slugs, text(fd, "coupon") || null, paymentProvider(), text(fd, "attribution") || null);
   if (!result.ok) return { error: result.error };
 
   redirect(checkoutPathFor(result.orderId));

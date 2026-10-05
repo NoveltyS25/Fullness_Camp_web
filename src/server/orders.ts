@@ -1,6 +1,8 @@
 import { getProgram } from "../data/programs.ts";
 import { priceCart } from "../lib/pricing.ts";
 import { newId, nowIso, type Db } from "./db/index.ts";
+import { createSetupLink } from "./auth.ts";
+import { cleanAttribution } from "./leads.ts";
 import { sendEmail } from "./outbox.ts";
 import { generateTempPassword, hashPassword } from "./security.ts";
 import { receiptEmail, welcomeEmail } from "./templates.ts";
@@ -22,6 +24,7 @@ export async function createOrder(
   slugs: string[],
   couponCode: string | null,
   provider: string,
+  attribution: string | null = null,
 ): Promise<CreateOrderResult> {
   const quote = priceCart(slugs, couponCode);
   if (quote.lines.length === 0) return { ok: false, error: "Tu carrito no tiene programas disponibles para pagar." };
@@ -30,9 +33,9 @@ export async function createOrder(
   const applied = quote.couponStatus === "applied" ? (couponCode ?? "").trim().toUpperCase() : null;
   await db.transaction(async (tx) => {
     await tx.run(
-      `INSERT INTO orders (id, status, buyer_cedula, buyer_name, buyer_email, buyer_phone, subtotal, discount, total, currency, coupon_code, provider, created_at)
-       VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, 'COP', ?, ?, ?)`,
-      [orderId, buyer.cedula, buyer.name, buyer.email.toLowerCase(), buyer.phone, quote.subtotal, quote.discount, quote.total, applied, provider, nowIso()],
+      `INSERT INTO orders (id, status, buyer_cedula, buyer_name, buyer_email, buyer_phone, subtotal, discount, total, currency, coupon_code, provider, attribution, created_at)
+       VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, 'COP', ?, ?, ?, ?)`,
+      [orderId, buyer.cedula, buyer.name, buyer.email.toLowerCase(), buyer.phone, quote.subtotal, quote.discount, quote.total, applied, provider, cleanAttribution(attribution), nowIso()],
     );
     for (const l of quote.lines) {
       await tx.run(
@@ -93,9 +96,9 @@ export async function completeOrder(db: Db, orderId: string, providerRef: string
 
   const items = await getOrderItems(db, orderId);
 
-  // El hash de la contraseña temporal se calcula antes de abrir la transacción (es trabajo lento).
-  const tempPassword = generateTempPassword();
-  const tempHash = await hashPassword(tempPassword);
+  // Cuenta nueva: nace con una contraseña al azar que nadie conoce; la persona crea la suya con el enlace del correo.
+  // El hash se calcula antes de abrir la transacción (es trabajo lento).
+  const unusableHash = await hashPassword(generateTempPassword(24));
   const today = new Date().toISOString().slice(0, 10);
 
   const outcome = await db.transaction(async (tx) => {
@@ -109,7 +112,7 @@ export async function completeOrder(db: Db, orderId: string, providerRef: string
       await tx.run(
         `INSERT INTO users (id, cedula, full_name, email, whatsapp_phone, role, password_hash, must_change_password, notify_whatsapp, created_at)
          VALUES (?, ?, ?, ?, ?, 'student', ?, 1, ?, ?)`,
-        [id, order.buyer_cedula, order.buyer_name, order.buyer_email, order.buyer_phone, tempHash, order.buyer_phone ? 1 : 0, nowIso()],
+        [id, order.buyer_cedula, order.buyer_name, order.buyer_email, order.buyer_phone, unusableHash, order.buyer_phone ? 1 : 0, nowIso()],
       );
       user = (await tx.get<User>(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`, [id]))!;
       created = true;
@@ -152,7 +155,7 @@ export async function completeOrder(db: Db, orderId: string, providerRef: string
   const welcome = welcomeEmail({
     fullName: user.full_name,
     cedula: user.cedula,
-    tempPassword: created ? tempPassword : null,
+    setPasswordUrl: created ? await createSetupLink(db, user.id, baseUrl) : null,
     programs: enrolled,
     payment: { orderId, total: order.total },
     loginUrl: `${baseUrl}/campus/ingresar`,

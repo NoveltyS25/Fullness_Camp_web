@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { ProgramCard } from "@/components/ProgramCard";
-import { programs, type ProgramCategory } from "@/data/programs";
+import { isPurchasable, programs, type ProgramCategory } from "@/data/programs";
+import { PAY_IN_FULL_PERCENT } from "@/lib/pricing";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://fullnesscampinternacional.com";
 
 export const metadata: Metadata = {
   title: "Programas y certificaciones de yoga",
@@ -17,8 +20,30 @@ const groups: { category: ProgramCategory; title: string }[] = [
 ];
 
 export default function Programas() {
+  // Lista de cursos (carrusel) para Google: describe el catálogo completo.
+  const courseList = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: programs.map((p, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      url: `${SITE}/programas/${p.slug}`,
+      item: {
+        "@type": "Course",
+        name: p.title,
+        description: p.summary,
+        url: `${SITE}/programas/${p.slug}`,
+        provider: { "@type": "EducationalOrganization", name: "Fullness Camp", url: SITE },
+        ...(isPurchasable(p) && {
+          offers: { "@type": "Offer", category: "Paid", price: Math.round(p.priceCOP * (1 - PAY_IN_FULL_PERCENT[p.category] / 100)), priceCurrency: "COP" },
+        }),
+      },
+    })),
+  };
+
   return (
     <main className="mx-auto max-w-6xl px-5 py-12">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(courseList).replace(/</g, "\\u003c") }} />
       <h1 className="mb-4 text-4xl font-bold">Programas</h1>
       <p className="mb-12 max-w-2xl text-lg text-muted">Elige tu formación. Si tienes dudas, una asesora te acompaña por WhatsApp.</p>
 

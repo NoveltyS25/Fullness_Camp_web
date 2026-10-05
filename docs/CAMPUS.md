@@ -10,9 +10,10 @@
 4. **Al confirmarse el pago**, de una sola vez y sin duplicar si la pasarela avisa dos veces:
    - se crea la cuenta del campus con la cédula (o se reutiliza si ya existía),
    - se inscribe a la persona en cada programa y en un grupo abierto, si lo hay,
-   - se envía un **correo con el paso a paso** y una contraseña temporal.
-5. **Primer ingreso** (`/campus/ingresar`): cédula + contraseña temporal. El campus **obliga a crear una contraseña propia**
-   antes de mostrar nada.
+   - se envía un **correo con el paso a paso** y un **enlace para crear su contraseña** (un solo uso, vale 7 días).
+5. **Crear la contraseña:** con el enlace del correo, la persona elige su propia contraseña (mínimo 8 caracteres, con letra y
+   número). **Nunca viaja una contraseña por correo.** Si el enlace venció, usa «Olvidé mi contraseña» con su cédula y correo.
+   Luego entra en `/campus/ingresar` con su cédula (ya escrita) y la contraseña que creó.
 6. **Acceso:** al entrar se consulta la base de datos. Solo ve el contenido quien tiene una **inscripción activa** (pago
    confirmado o inscripción manual). Sin ella ve «Aún no tienes un programa activo».
 
@@ -27,7 +28,8 @@
 
 ## Seguridad
 
-- Contraseñas con *hash* (scrypt); nunca se guardan ni se muestran. La temporal solo viaja en el correo de bienvenida.
+- Contraseñas con *hash* (scrypt); nunca se guardan ni se muestran. La cuenta nueva nace con una clave al azar que nadie
+  conoce hasta que la persona crea la suya con el enlace.
 - Bloqueo de 15 minutos tras 5 intentos fallidos por cédula (20 por IP). Mismo mensaje si la cédula no existe.
 - Cookie de sesión `httpOnly`, `sameSite=lax` y `secure` en producción. La sesión se valida contra la base de datos en cada
   visita y se cierran las demás sesiones al cambiar la contraseña.

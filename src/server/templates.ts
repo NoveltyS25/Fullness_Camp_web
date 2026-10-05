@@ -21,8 +21,8 @@ const button = (href: string, label: string) =>
 export interface WelcomeInput {
   fullName: string;
   cedula: string;
-  /** Solo para cuentas nuevas. Si ya tenía cuenta es null y se le indica que use la que ya tiene. */
-  tempPassword: string | null;
+  /** Solo para cuentas nuevas: enlace para crear su contraseña. Si ya tenía cuenta es null y usa la que ya tiene. */
+  setPasswordUrl: string | null;
   programs: { title: string; cohortName: string | null }[];
   /** null cuando la inscripción la hizo una administradora (sin pago en línea). */
   payment: { orderId: string; total: number } | null;
@@ -32,7 +32,7 @@ export interface WelcomeInput {
 
 export function welcomeEmail(i: WelcomeInput): { subject: string; text: string; html: string } {
   const name = firstName(i.fullName);
-  const isNew = i.tempPassword !== null;
+  const isNew = i.setPasswordUrl !== null;
   const subject = isNew
     ? `¡Bienvenida a ${BRAND}! Así entras a tu campus virtual`
     : i.payment ? `Tu pago fue confirmado: ya tienes acceso en el campus` : `Tu inscripción está lista en el campus virtual`;
@@ -42,10 +42,10 @@ export function welcomeEmail(i: WelcomeInput): { subject: string; text: string; 
   const intro = i.payment ? `Recibimos tu pago. ¡Gracias por confiar en ${BRAND}!` : i.programs.length ? `Te inscribimos en un programa de ${BRAND}.` : `Creamos tu cuenta del campus virtual de ${BRAND}.`;
 
   const stepsNew = [
-    `1. Entra a ${i.loginUrl}`,
-    `2. En "Cédula" escribe: ${i.cedula}`,
-    `3. En "Contraseña" escribe esta contraseña temporal: ${i.tempPassword}`,
-    `4. Por tu seguridad, el campus te pedirá crear una contraseña nueva que solo tú conozcas.`,
+    `1. Abre este enlace para crear tu contraseña (sirve una sola vez y dura 7 días): ${i.setPasswordUrl}`,
+    `2. Escribe la contraseña que quieras usar: mínimo 8 caracteres, con una letra y un número.`,
+    `3. Entra al campus virtual en ${i.loginUrl}`,
+    `4. En "Cédula" escribe ${i.cedula} y, en "Contraseña", la que acabas de crear.`,
     `5. ¡Listo! Verás tus clases, tu horario y los avisos de tu profesora.`,
   ];
   const stepsExisting = [
@@ -66,17 +66,17 @@ export function welcomeEmail(i: WelcomeInput): { subject: string; text: string; 
     "Cómo entrar a tu campus virtual:",
     ...(isNew ? stepsNew : stepsExisting),
     "",
-    isNew ? "Guarda este correo hasta que cambies tu contraseña y no se la compartas a nadie." : "",
+    isNew ? `Si el enlace venció, entra a ${i.recoverUrl} con tu cédula y tu correo y te enviamos otro.` : "",
     `${BRAND}`,
   ].join("\n");
 
   const li = (s: string) => `<li style="margin-bottom:10px">${s}</li>`;
   const stepsHtml = isNew
     ? [
+        li("Pulsa el botón <strong>«Crear mi contraseña»</strong> de abajo (sirve una sola vez y dura 7 días)."),
+        li("Escribe la contraseña que quieras usar: mínimo 8 caracteres, con una letra y un número."),
         li(`Entra a <a href="${esc(i.loginUrl)}">${esc(i.loginUrl)}</a>`),
-        li(`En <strong>Cédula</strong> escribe: <strong>${esc(i.cedula)}</strong>`),
-        li(`En <strong>Contraseña</strong> escribe esta contraseña temporal:<br><span style="display:inline-block;background:#f1ddd8;padding:8px 16px;border-radius:8px;font-family:Consolas,monospace;font-size:22px;letter-spacing:2px">${esc(i.tempPassword!)}</span>`),
-        li("Por tu seguridad, el campus te pedirá <strong>crear una contraseña nueva</strong> que solo tú conozcas."),
+        li(`En <strong>Cédula</strong> escribe <strong>${esc(i.cedula)}</strong> y, en <strong>Contraseña</strong>, la que acabas de crear.`),
         li("¡Listo! Verás tus clases, tu horario y los avisos de tu profesora."),
       ].join("")
     : [
@@ -92,8 +92,8 @@ export function welcomeEmail(i: WelcomeInput): { subject: string; text: string; 
       (i.programs.length ? `<div style="background:#fbf6f3;border:1px solid #f1ddd8;border-radius:16px;padding:16px 20px"><strong>Tu inscripción</strong><ul style="padding-left:20px;margin:8px 0">${i.programs.map((p) => `<li>${esc(p.title)}${p.cohortName ? ` <span style="color:#5d4542">(grupo: ${esc(p.cohortName)})</span>` : ` <span style="color:#5d4542">(te asignaremos grupo muy pronto)</span>`}</li>`).join("")}</ul>` +
       `${paymentLine ? `<span style="color:#5d4542">${esc(paymentLine)}</span>` : ""}</div>` : "") +
       `<h2 style="color:#7a4a45;font-size:22px;margin-top:28px">Cómo entrar a tu campus virtual</h2><ol style="padding-left:22px">${stepsHtml}</ol>` +
-      button(i.loginUrl, "Entrar al campus virtual") +
-      (isNew ? `<p style="color:#5d4542">Guarda este correo hasta que cambies tu contraseña y no se la compartas a nadie.</p>` : ""),
+      (isNew ? button(i.setPasswordUrl!, "Crear mi contraseña") : button(i.loginUrl, "Entrar al campus virtual")) +
+      (isNew ? `<p style="color:#5d4542">Si el enlace venció, entra a <a href="${esc(i.recoverUrl)}">${esc(i.recoverUrl)}</a> con tu cédula y tu correo y te enviamos otro.</p>` : ""),
   );
 
   return { subject, text, html };
@@ -119,14 +119,28 @@ export function passwordResetEmail(i: { fullName: string; resetUrl: string }) {
 }
 
 /** Cuenta creada por una administradora (pago por transferencia, por ejemplo). */
-export function manualAccountEmail(i: { fullName: string; cedula: string; tempPassword: string; programTitle: string | null; loginUrl: string }) {
+export function manualAccountEmail(i: { fullName: string; cedula: string; setPasswordUrl: string; programTitle: string | null; loginUrl: string; recoverUrl: string }) {
   return welcomeEmail({
     fullName: i.fullName,
     cedula: i.cedula,
-    tempPassword: i.tempPassword,
+    setPasswordUrl: i.setPasswordUrl,
     programs: i.programTitle ? [{ title: i.programTitle, cohortName: null }] : [],
     payment: null,
     loginUrl: i.loginUrl,
-    recoverUrl: i.loginUrl,
+    recoverUrl: i.recoverUrl,
   });
+}
+
+export function leadEmail(i: { fullName: string; programTitle: string; interest: "info" | "waitlist"; programUrl: string; whatsappUrl: string }) {
+  const name = firstName(i.fullName);
+  const waitlist = i.interest === "waitlist";
+  const subject = waitlist ? `Te avisaremos cuando abra: ${i.programTitle}` : `Recibimos tu solicitud: ${i.programTitle}`;
+  const intro = waitlist
+    ? `Anotamos tus datos para avisarte apenas abramos inscripciones de «${i.programTitle}».`
+    : `Recibimos tu solicitud de información sobre «${i.programTitle}». Una asesora te escribirá por WhatsApp o correo.`;
+  const text = `Hola ${name},\n\n${intro}\n\nMientras tanto puedes ver el programa completo aquí: ${i.programUrl}\n¿Prefieres escribirnos tú? ${i.whatsappUrl}\n\n${BRAND}`;
+  const html = wrap(
+    `<h1 style="color:#7a4a45;font-size:24px">Gracias, ${esc(name)}</h1><p>${esc(intro)}</p>${button(i.programUrl, "Ver el programa")}<p>¿Prefieres escribirnos tú? <a href="${esc(i.whatsappUrl)}">Habla con una asesora por WhatsApp</a>.</p>`,
+  );
+  return { subject, text, html };
 }

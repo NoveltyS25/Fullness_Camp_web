@@ -40,3 +40,24 @@ se muestra en el sitio pero no se puede comprar.
 - Nombre legal: hoy es "Fullnes Camp International" en [src/lib/brand.ts](../src/lib/brand.ts); se ajusta con las políticas.
 - Confirmar el aval que se mostrará: Yoga Alliance (RYS 200) o "Yoga Inbound Alliance", porque los PDF mencionan ambos.
 - Cuenta de Bold: llaves de API y si permite cobrar en USD.
+
+## Landing pages: cosas por confirmar o completar
+
+- **Aval:** el sitio actual y el PDF de 300 h hablan de **Yoga Alliance (RYS 200)**; los PDF de Pilates, Kids, Mujer e Inmersión
+  hablan de «Yoga Inbound Alliance / Yoga Inbound School International of India». Las landings usan lo que dice cada PDF o la
+  página actual. Hay que confirmar el aval exacto de cada diploma antes de lanzar campañas.
+- **Horas de la Maestría para la mujer:** la página actual dice **500 h** y el PDF habla de **200 h** (doble titulación 200 + 200).
+  La landing muestra 500 h «por confirmar».
+- **Horas del taller prenatal:** la página actual dice «100 horas» y el PDF «9 módulos». La landing usa «9 sesiones».
+- **PDF por actualizar** (tienen datos vencidos o bancarios, por eso se excluyeron de la revista):
+  Hatha 300 h (págs. de inversión y promo), Kids (inversión), Maestría (fechas 2021 e inversión), Inmersión (fechas de enero
+  de 2021 e inversión) y Taller prenatal (inversión). La de Pilates trae el bloque de pago al pie de la pág. 9, que se tapa.
+  Cuando haya versiones nuevas sin datos bancarios, se corre `scripts/build-magazines.py`.
+- **Teléfono en los PDF:** aparece +57 323 571 8777 (también como Nequi/Daviplata) y la asesora es +57 311 674 1900. Conviene unificar.
+- **Fechas de inicio y cupos** de cada cohorte, para mostrarlos en la landing.
+- **Testimonios:** hoy solo se usan 3 reseñas reales de Google. Conviene reunir testimonios en video por programa.
+- **Docente sin foto:** Nairo Andrés Díaz (Andy EVS) en la landing de Yoga Kids.
+- **Reclamo público:** hay una reseña de Google con un reclamo por reembolso. Por eso conviene publicar pronto una política
+  clara de cancelación y reembolso (la FAQ por ahora remite a una asesora).
+- **GA4 / Tag Manager / píxel de Meta:** instalar con el consentimiento de cookies correspondiente (los eventos ya están listos).
+- **Descripción de los retiros** (Abundancia, India) y de las demás páginas: Nosotros, Sedes, Retiros, Talleres y Ashram.

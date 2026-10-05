@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS orders (
   provider TEXT NOT NULL,
   provider_ref TEXT,
   user_id TEXT REFERENCES users (id) ON DELETE SET NULL,
+  attribution TEXT,
   created_at TEXT NOT NULL,
   paid_at TEXT
 );
@@ -150,6 +151,22 @@ CREATE TABLE IF NOT EXISTS deliveries (
   UNIQUE (notification_id, channel)
 );
 CREATE INDEX IF NOT EXISTS deliveries_status_idx ON deliveries (status, created_at);
+
+-- Personas interesadas que dejaron sus datos en una landing (pidieron información o que les avisen cuando abra un programa).
+-- attribution guarda de qué campaña llegaron (utm_*). De la IP solo se guarda un hash, para frenar el spam.
+CREATE TABLE IF NOT EXISTS leads (
+  id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  program_slug TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  whatsapp TEXT,
+  interest TEXT NOT NULL CHECK (interest IN ('info', 'waitlist')),
+  attribution TEXT,
+  ip_hash TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS leads_created_idx ON leads (created_at);
+CREATE INDEX IF NOT EXISTS leads_ip_idx ON leads (ip_hash, created_at);
 
 -- Registro de TODO lo que el sistema envía (correos y WhatsApp). Sirve de auditoría y, en modo
 -- demostración, de "bandeja" para ver los mensajes sin enviarlos de verdad.

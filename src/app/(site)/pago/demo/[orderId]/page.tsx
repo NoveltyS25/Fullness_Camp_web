@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { ScrollTop } from "@/components/ScrollTop";
 import { formatCOP } from "@/lib/pricing";
 import { getDb } from "@/server/db";
 import { getOrder, getOrderItems } from "@/server/orders";
@@ -22,6 +23,7 @@ export default async function PagoDemo(props: PageProps<"/pago/demo/[orderId]">)
 
   return (
     <main className="mx-auto max-w-xl px-5 py-12">
+      <ScrollTop />
       <p className="mb-6 rounded-2xl bg-ink px-4 py-3 text-center font-medium text-white">
         MODO DEMOSTRACIÓN · No se cobra dinero ni se piden datos de tarjeta
       </p>

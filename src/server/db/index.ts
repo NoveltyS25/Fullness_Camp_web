@@ -33,6 +33,7 @@ class SqliteDb implements Db {
     // WAL: quien lee no bloquea a quien escribe.
     if (path !== ":memory:") this.raw.exec("PRAGMA journal_mode = WAL");
     this.raw.exec(SCHEMA);
+    this.addColumnIfMissing("orders", "attribution", "TEXT");
     // Dentro de una transacción, "transaction" anidada solo ejecuta la función.
     this.txView = {
       all: (s, p) => this.all(s, p),
@@ -40,6 +41,12 @@ class SqliteDb implements Db {
       run: (s, p) => this.run(s, p),
       transaction: (fn) => fn(this.txView),
     };
+  }
+
+  /** Migración mínima: agrega una columna nueva a una tabla que ya existía en una base creada antes. */
+  private addColumnIfMissing(table: string, column: string, ddl: string) {
+    const cols = this.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) this.raw.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
   }
 
   async all<T = Row>(sql: string, params: Param[] = []): Promise<T[]> {

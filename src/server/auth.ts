@@ -77,10 +77,10 @@ export async function destroySession(db: Db, token: string): Promise<void> {
   await db.run("DELETE FROM auth_sessions WHERE token_hash = ?", [hashToken(token)]);
 }
 
-/** Enlace de un solo uso para crear una contraseña nueva (válido 1 hora). */
-export async function createPasswordReset(db: Db, userId: string): Promise<string> {
+/** Enlace de un solo uso para crear una contraseña. Por defecto vale 1 hora (recuperación). */
+export async function createPasswordReset(db: Db, userId: string, ttlMs = 3600_000): Promise<string> {
   const token = generateToken();
-  const expires = new Date(Date.now() + 3600_000).toISOString();
+  const expires = new Date(Date.now() + ttlMs).toISOString();
   await db.run("INSERT INTO password_resets (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)", [
     hashToken(token),
     userId,
@@ -109,4 +109,15 @@ export async function peekPasswordReset(db: Db, token: string): Promise<boolean>
     [hashToken(token), nowIso()],
   );
   return !!row;
+}
+
+const SETUP_LINK_DAYS = 7;
+
+/**
+ * Enlace para que una cuenta nueva cree su propia contraseña. Vale 7 días (quien paga puede tardar en leer el correo);
+ * si vence, la persona usa "Olvidé mi contraseña" con su cédula y correo.
+ */
+export async function createSetupLink(db: Db, userId: string, baseUrl: string): Promise<string> {
+  const token = await createPasswordReset(db, userId, SETUP_LINK_DAYS * 24 * 3600_000);
+  return `${baseUrl}/campus/restablecer?token=${token}&bienvenida=1`;
 }

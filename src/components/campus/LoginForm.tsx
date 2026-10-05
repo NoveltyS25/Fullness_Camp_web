@@ -7,7 +7,7 @@ import { loginAction, type FormState } from "@/app/campus/actions";
 
 const input = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-4 text-lg";
 
-export function LoginForm() {
+export function LoginForm({ defaultCedula = "" }: { defaultCedula?: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(loginAction, {});
   const [show, setShow] = useState(false);
 
@@ -15,7 +15,7 @@ export function LoginForm() {
     <form onSubmit={submitWith(action)} className="space-y-5">
       <div>
         <label htmlFor="cedula" className="mb-2 block text-lg font-medium">Cédula</label>
-        <input id="cedula" name="cedula" inputMode="numeric" autoComplete="username" required className={input} placeholder="Solo números" />
+        <input id="cedula" name="cedula" inputMode="numeric" autoComplete="username" required defaultValue={defaultCedula} className={input} placeholder="Solo números" />
       </div>
       <div>
         <label htmlFor="password" className="mb-2 block text-lg font-medium">Contraseña</label>

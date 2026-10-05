@@ -12,7 +12,8 @@ export const metadata: Metadata = {
 
 export default async function Ingresar(props: PageProps<"/campus/ingresar">) {
   if (await getCurrentUser()) redirect("/campus");
-  const { clave } = await props.searchParams;
+  const { clave, cedula } = await props.searchParams;
+  const prefill = (Array.isArray(cedula) ? cedula[0] : cedula)?.replace(/\D/g, "").slice(0, 15) ?? "";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-8 px-5 py-12">
@@ -30,7 +31,7 @@ export default async function Ingresar(props: PageProps<"/campus/ingresar">) {
         </p>
       )}
 
-      <LoginForm />
+      <LoginForm defaultCedula={prefill} />
 
       <p className="text-center text-muted">
         ¿Aún no tienes cuenta? Se crea automáticamente cuando pagas tu programa y te llega un correo con los pasos.{" "}

@@ -11,13 +11,16 @@ export const metadata: Metadata = {
 };
 
 export default async function Restablecer(props: PageProps<"/campus/restablecer">) {
-  const { token, error } = await props.searchParams;
+  const { token, error, bienvenida } = await props.searchParams;
   const t = Array.isArray(token) ? token[0] : token;
   const valid = t ? await peekPasswordReset(getDb(), t) : false;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-8 px-5 py-12">
-      <h1 className="text-center text-3xl font-bold">Crear contraseña nueva</h1>
+      <div className="text-center">
+        <h1 className="mb-2 text-3xl font-bold">{bienvenida ? "Crea tu contraseña" : "Crear contraseña nueva"}</h1>
+        {bienvenida && valid && <p className="text-lg text-muted">¡Bienvenida a tu campus virtual! Elige la contraseña con la que vas a entrar. Tu usuario es tu cédula.</p>}
+      </div>
       {valid && t ? (
         <PasswordForm action={resetPasswordAction} submitLabel="Guardar contraseña" token={t} initialError={Array.isArray(error) ? error[0] : error} />
       ) : (
