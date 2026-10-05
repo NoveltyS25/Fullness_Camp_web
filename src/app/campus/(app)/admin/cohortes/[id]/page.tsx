@@ -1,57 +1,26 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ActionForm, inputClass } from "@/components/campus/ActionForm";
-import { SessionCard, type SessionRow } from "@/components/campus/SessionCard";
+import { SessionCard } from "@/components/campus/SessionCard";
 import { programs } from "@/data/programs";
-import { getCurrentProfile } from "@/lib/campus/auth";
-import { createClient } from "@/lib/supabase/server";
-import { addSessions, enrollStudent, setCohortActive, setEnrollmentStatus } from "../../actions";
+import { getCohort, listCohortEnrollments, listCohortSessions } from "@/server/campus";
+import { getDb } from "@/server/db";
+import { getCurrentUser } from "@/server/web";
+import { addSessionsAction, enrollManualAction, setCohortActiveAction, setEnrollmentStatusAction } from "../../actions";
 
 export const metadata = { title: "Cohorte" };
-
-interface Cohort {
-  id: string;
-  name: string;
-  sede: string;
-  program_slug: string;
-  starts_on: string | null;
-  active: boolean;
-  profiles: { full_name: string; email: string | null } | null;
-}
-interface Enrollment {
-  student_id: string;
-  status: "active" | "paused" | "cancelled";
-  profiles: { full_name: string; email: string | null; whatsapp_phone: string | null } | null;
-}
 
 const statusLabel = { active: "Activa", paused: "Pausada", cancelled: "Cancelada" } as const;
 
 export default async function CohortePage(props: PageProps<"/campus/admin/cohortes/[id]">) {
-  const profile = await getCurrentProfile();
-  if (!profile || profile.role !== "admin") redirect("/campus");
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") redirect("/campus");
   const { id } = await props.params;
 
-  const supabase = await createClient();
-  const { data: cohort } = await supabase
-    .from("cohorts")
-    .select("id, name, sede, program_slug, starts_on, active, profiles:teacher_id(full_name, email)")
-    .eq("id", id)
-    .maybeSingle<Cohort>();
+  const db = getDb();
+  const cohort = await getCohort(db, id);
   if (!cohort) notFound();
-
-  const [{ data: sessions }, { data: enrollments }] = await Promise.all([
-    supabase
-      .from("sessions")
-      .select("id, title, starts_at, ends_at, location, online_url, status, cohorts(name, sede)")
-      .eq("cohort_id", id)
-      .order("starts_at")
-      .returns<SessionRow[]>(),
-    supabase
-      .from("enrollments")
-      .select("student_id, status, profiles:student_id(full_name, email, whatsapp_phone)")
-      .eq("cohort_id", id)
-      .returns<Enrollment[]>(),
-  ]);
+  const [sessions, enrollments] = await Promise.all([listCohortSessions(db, id), listCohortEnrollments(db, id)]);
 
   return (
     <div className="space-y-12">
@@ -60,9 +29,9 @@ export default async function CohortePage(props: PageProps<"/campus/admin/cohort
         <h1 className="mb-1 text-3xl font-bold">{cohort.name}</h1>
         <p className="text-lg text-muted">
           {cohort.sede} · {programs.find((p) => p.slug === cohort.program_slug)?.title ?? cohort.program_slug}
-          <br />Profesora: {cohort.profiles?.full_name || cohort.profiles?.email || "sin asignar"}
+          <br />Profesora: {cohort.teacher_name ?? "sin asignar"}
         </p>
-        <form action={setCohortActive} className="mt-4">
+        <form action={setCohortActiveAction} className="mt-4">
           <input type="hidden" name="cohort_id" value={cohort.id} />
           <input type="hidden" name="active" value={String(!cohort.active)} />
           <button type="submit" className="btn btn-secondary">{cohort.active ? "Marcar como inactiva" : "Volver a activar"}</button>
@@ -70,21 +39,17 @@ export default async function CohortePage(props: PageProps<"/campus/admin/cohort
       </div>
 
       <section aria-labelledby="clases">
-        <h2 id="clases" className="mb-4 text-2xl font-bold">Clases ({sessions?.length ?? 0})</h2>
-        {(sessions ?? []).length === 0 ? (
+        <h2 id="clases" className="mb-4 text-2xl font-bold">Clases ({sessions.length})</h2>
+        {sessions.length === 0 ? (
           <p className="rounded-3xl border border-clay-soft bg-white p-6 text-lg">Aún no hay clases. Agrégalas abajo.</p>
         ) : (
-          <ul className="space-y-3">
-            {(sessions ?? []).map((s) => (
-              <SessionCard key={s.id} s={s} editHref={`/campus/profesor/sesion/${s.id}`} />
-            ))}
-          </ul>
+          <ul className="space-y-3">{sessions.map((s) => <SessionCard key={s.id} s={s} editHref={`/campus/profesor/sesion/${s.id}`} />)}</ul>
         )}
       </section>
 
       <section aria-labelledby="agregar" className="max-w-2xl">
         <h2 id="agregar" className="mb-4 text-2xl font-bold">Agregar clases</h2>
-        <ActionForm action={addSessions} submitLabel="Crear clases">
+        <ActionForm action={addSessionsAction} submitLabel="Crear clases">
           <input type="hidden" name="cohort_id" value={cohort.id} />
           <div>
             <label htmlFor="title" className="mb-2 block text-lg font-medium">Título</label>
@@ -104,7 +69,7 @@ export default async function CohortePage(props: PageProps<"/campus/admin/cohort
           <div>
             <label htmlFor="weeks" className="mb-2 block text-lg font-medium">¿Cuántas semanas se repite?</label>
             <input id="weeks" name="weeks" type="number" min={1} max={40} defaultValue={1} className={inputClass} />
-            <p className="mt-1 text-muted">1 = una sola clase. Con 12, se crean 12 clases, una por semana, a la misma hora.</p>
+            <p className="mt-1 text-muted">1 = una sola clase. Con 12 se crean 12 clases, una por semana, a la misma hora.</p>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
@@ -120,20 +85,20 @@ export default async function CohortePage(props: PageProps<"/campus/admin/cohort
       </section>
 
       <section aria-labelledby="estudiantes">
-        <h2 id="estudiantes" className="mb-4 text-2xl font-bold">Estudiantes ({enrollments?.length ?? 0})</h2>
+        <h2 id="estudiantes" className="mb-4 text-2xl font-bold">Estudiantes ({enrollments.length})</h2>
         <ul className="mb-8 space-y-3">
-          {(enrollments ?? []).map((e) => (
-            <li key={e.student_id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-clay-soft bg-white p-4">
+          {enrollments.map((e) => (
+            <li key={e.user_id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-clay-soft bg-white p-4">
               <div>
-                <p className="text-lg font-bold">{e.profiles?.full_name || "Sin nombre"}</p>
-                <p className="text-muted">{e.profiles?.email}{e.profiles?.whatsapp_phone ? ` · WhatsApp ${e.profiles.whatsapp_phone}` : ""}</p>
+                <p className="text-lg font-bold">{e.full_name}</p>
+                <p className="text-muted">Cédula {e.cedula} · {e.email}{e.whatsapp_phone ? ` · WhatsApp ${e.whatsapp_phone}` : ""}</p>
                 <p className="text-sm font-medium text-clay-dark">{statusLabel[e.status]}</p>
               </div>
               <div className="flex gap-2">
                 {(["active", "paused", "cancelled"] as const).filter((s) => s !== e.status).map((s) => (
-                  <form key={s} action={setEnrollmentStatus}>
+                  <form key={s} action={setEnrollmentStatusAction}>
                     <input type="hidden" name="cohort_id" value={cohort.id} />
-                    <input type="hidden" name="student_id" value={e.student_id} />
+                    <input type="hidden" name="user_id" value={e.user_id} />
                     <input type="hidden" name="status" value={s} />
                     <button type="submit" className="min-h-12 rounded-full px-4 text-clay-dark underline hover:bg-clay-soft">{statusLabel[s]}</button>
                   </form>
@@ -144,13 +109,23 @@ export default async function CohortePage(props: PageProps<"/campus/admin/cohort
         </ul>
 
         <div className="max-w-2xl">
-          <h3 className="mb-3 text-xl font-bold">Inscribir a una estudiante</h3>
-          <p className="mb-4 text-muted">Debe haber entrado antes al campus con su correo.</p>
-          <ActionForm action={enrollStudent} submitLabel="Inscribir">
+          <h3 className="mb-3 text-xl font-bold">Inscribir manualmente</h3>
+          <p className="mb-4 text-muted">Por ejemplo, un pago por transferencia. Si la cédula no tiene cuenta, escribe también el nombre y el correo: se crea la cuenta y se le envía el paso a paso.</p>
+          <ActionForm action={enrollManualAction} submitLabel="Inscribir">
             <input type="hidden" name="cohort_id" value={cohort.id} />
             <div>
-              <label htmlFor="student_email" className="mb-2 block text-lg font-medium">Correo de la estudiante</label>
-              <input id="student_email" name="email" type="email" required className={inputClass} />
+              <label htmlFor="m_cedula" className="mb-2 block text-lg font-medium">Cédula</label>
+              <input id="m_cedula" name="cedula" inputMode="numeric" required className={inputClass} />
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label htmlFor="m_name" className="mb-2 block text-lg font-medium">Nombre (solo si no tiene cuenta)</label>
+                <input id="m_name" name="full_name" className={inputClass} />
+              </div>
+              <div>
+                <label htmlFor="m_email" className="mb-2 block text-lg font-medium">Correo (solo si no tiene cuenta)</label>
+                <input id="m_email" name="email" type="email" className={inputClass} />
+              </div>
             </div>
           </ActionForm>
         </div>

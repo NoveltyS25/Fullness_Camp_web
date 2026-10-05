@@ -64,8 +64,8 @@ export function CartView() {
       </dl>
 
       <div className="space-y-3">
-        <button type="button" disabled className="btn btn-primary w-full">Continuar al pago</button>
-        <p className="text-center text-muted">El pago en línea con tarjeta se activará muy pronto. Mientras tanto, una asesora puede ayudarte a inscribirte.</p>
+        <Link href="/checkout" className="btn btn-primary w-full">Continuar al pago</Link>
+        <p className="text-center text-muted">Pagas una sola vez con tarjeta. Si quieres cuotas, las difieres con tu banco.</p>
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { rescheduleSession, type FormState } from "@/app/campus/actions";
+import { submitWith } from "@/lib/form";
+import { rescheduleAction, type FormState } from "@/app/campus/actions";
 
 const input = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-4 text-lg";
 
@@ -17,10 +18,10 @@ interface Props {
 }
 
 export function RescheduleForm(p: Props) {
-  const [state, action, pending] = useActionState<FormState, FormData>(rescheduleSession, {});
+  const [state, action, pending] = useActionState<FormState, FormData>(rescheduleAction, {});
 
   return (
-    <form action={action} className="space-y-6">
+    <form onSubmit={submitWith(action)} className="space-y-6">
       <input type="hidden" name="session_id" value={p.sessionId} />
 
       <p className="rounded-2xl bg-clay-soft p-4 text-lg">

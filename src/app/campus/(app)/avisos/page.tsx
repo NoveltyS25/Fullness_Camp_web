@@ -1,36 +1,24 @@
-import { markAllRead } from "../../actions";
-import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import { getNotifications } from "@/server/campus";
+import { getDb } from "@/server/db";
+import { getCurrentUser } from "@/server/web";
+import { markAllReadAction } from "../../actions";
 
 export const metadata = { title: "Avisos" };
-
-interface Notice {
-  id: string;
-  title: string;
-  body: string;
-  read_at: string | null;
-  created_at: string;
-}
 
 const when = new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", dateStyle: "medium", timeStyle: "short" });
 
 export default async function Avisos() {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("notifications")
-    .select("id, title, body, read_at, created_at")
-    .order("created_at", { ascending: false })
-    .limit(50)
-    .returns<Notice[]>();
-  const notices = data ?? [];
+  const user = await getCurrentUser();
+  if (!user) redirect("/campus/ingresar");
+  const notices = await getNotifications(getDb(), user.id);
   const unread = notices.some((n) => !n.read_at);
 
   return (
     <>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold sm:text-4xl">Avisos</h1>
-        {unread && (
-          <form action={markAllRead}><button type="submit" className="btn btn-secondary">Marcar todo como leído</button></form>
-        )}
+        {unread && <form action={markAllReadAction}><button type="submit" className="btn btn-secondary">Marcar todo como leído</button></form>}
       </div>
 
       {notices.length === 0 ? (

@@ -1,57 +1,97 @@
 import Link from "next/link";
-import { SessionCard, type SessionRow } from "@/components/campus/SessionCard";
-import { getCurrentProfile } from "@/lib/campus/auth";
+import { redirect } from "next/navigation";
+import { SessionCard } from "@/components/campus/SessionCard";
+import { getProgram } from "@/data/programs";
 import { dayKey, formatDay } from "@/lib/campus/time";
-import { createClient } from "@/lib/supabase/server";
+import { whatsappLink } from "@/lib/whatsapp";
+import { canAccessCampus, countPendingOrders, getEntitlements, getStudentSessions, type SessionRow } from "@/server/campus";
+import { getDb } from "@/server/db";
+import { getCurrentUser } from "@/server/web";
 
 export const metadata = { title: "Mi horario" };
 
-export default async function MiHorario() {
-  const profile = await getCurrentProfile();
-  const supabase = await createClient();
+export default async function MiHorario(props: PageProps<"/campus">) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/campus/ingresar");
+  const { bienvenida } = await props.searchParams;
 
-  // La seguridad por filas deja ver solo las sesiones de las cohortes de la usuaria.
-  const { data } = await supabase
-    .from("sessions")
-    .select("id, title, starts_at, ends_at, location, online_url, status, cohorts(name, sede)")
-    .gte("ends_at", new Date().toISOString())
-    .order("starts_at")
-    .limit(80)
-    .returns<SessionRow[]>();
+  const db = getDb();
+  const entitlements = await getEntitlements(db, user.id);
+  const first = user.full_name.split(" ")[0];
 
-  const sessions = data ?? [];
-  const byDay = new Map<string, SessionRow[]>();
-  for (const s of sessions) {
-    const k = dayKey(s.starts_at);
-    byDay.set(k, [...(byDay.get(k) ?? []), s]);
+  // Regla de acceso: una estudiante solo ve el contenido si tiene una inscripción activa (por pago o por una administradora).
+  if (!canAccessCampus(user, entitlements)) {
+    const pending = Number((await countPendingOrders(db, user.cedula))?.n ?? 0);
+    return (
+      <>
+        <h1 className="mb-6 text-3xl font-bold sm:text-4xl">Hola, {first}</h1>
+        <div className="rounded-3xl border border-clay-soft bg-white p-8">
+          <h2 className="mb-3 text-2xl font-bold">Aún no tienes un programa activo</h2>
+          <p className="mb-6 text-lg">
+            {pending > 0
+              ? "Tu pago todavía no está confirmado. En cuanto se confirme, tus clases aparecerán aquí."
+              : "No encontramos una inscripción pagada con tu cédula. Cuando te inscribas y pagues, tus clases aparecerán aquí."}
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link href="/programas" className="btn btn-primary">Ver programas</Link>
+            <a href={whatsappLink(`Hola, mi cédula es ${user.cedula} y no veo mi programa en el campus.`)} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">
+              Hablar con una asesora
+            </a>
+          </div>
+        </div>
+      </>
+    );
   }
+
+  const sessions: SessionRow[] = await getStudentSessions(db, user.id);
+  const byDay = new Map<string, SessionRow[]>();
+  for (const s of sessions) byDay.set(dayKey(s.starts_at), [...(byDay.get(dayKey(s.starts_at)) ?? []), s]);
 
   return (
     <>
-      <h1 className="mb-2 text-3xl font-bold sm:text-4xl">Hola{profile?.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}</h1>
-      <p className="mb-8 text-lg text-muted">Estas son tus próximas clases.</p>
-
-      {profile && !profile.full_name && (
-        <p className="mb-8 rounded-2xl bg-clay-soft p-4 text-lg">
-          Completa tu nombre y tu WhatsApp en <Link href="/campus/perfil" className="font-medium underline">Mi perfil</Link> para recibir avisos si cambia un horario.
+      <h1 className="mb-2 text-3xl font-bold sm:text-4xl">Hola, {first}</h1>
+      {bienvenida && (
+        <p role="status" className="my-6 rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">
+          ✓ Tu contraseña quedó guardada. ¡Bienvenida a tu campus virtual!
         </p>
       )}
 
-      {sessions.length === 0 ? (
-        <div className="rounded-3xl border border-clay-soft bg-white p-8 text-center">
-          <p className="text-xl">Aún no tienes clases programadas.</p>
-          <p className="mt-2 text-muted">Cuando te inscribas a un programa, tu horario aparecerá aquí.</p>
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {[...byDay.entries()].map(([key, list]) => (
-            <section key={key} aria-labelledby={`d-${key}`}>
-              <h2 id={`d-${key}`} className="mb-3 text-xl font-bold">{formatDay(list[0].starts_at)}</h2>
-              <ul className="space-y-3">{list.map((s) => <SessionCard key={s.id} s={s} />)}</ul>
-            </section>
-          ))}
-        </div>
+      {entitlements.length > 0 && (
+        <section aria-labelledby="programas" className="mb-12 mt-6">
+          <h2 id="programas" className="mb-4 text-2xl font-bold">Mis programas</h2>
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {entitlements.map((e) => (
+              <li key={e.enrollment_id} className="rounded-3xl border border-clay-soft bg-white p-5">
+                <h3 className="text-xl font-bold text-clay-dark">{getProgram(e.program_slug)?.title ?? e.program_slug}</h3>
+                {e.cohort_name ? (
+                  <p className="mt-2 text-muted">Grupo: {e.cohort_name} · {e.sede}<br />Profesora: {e.teacher_name ?? "por asignar"}</p>
+                ) : (
+                  <p className="mt-2 text-muted">Pago confirmado ✓ Te asignaremos grupo y horario muy pronto.</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
+
+      <section aria-labelledby="clases">
+        <h2 id="clases" className="mb-4 text-2xl font-bold">Próximas clases</h2>
+        {sessions.length === 0 ? (
+          <div className="rounded-3xl border border-clay-soft bg-white p-8 text-center">
+            <p className="text-xl">Aún no tienes clases programadas.</p>
+            <p className="mt-2 text-muted">Cuando tu grupo tenga horario, aparecerá aquí.</p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {[...byDay.entries()].map(([key, list]) => (
+              <div key={key}>
+                <h3 className="mb-3 text-xl font-bold">{formatDay(list[0].starts_at)}</h3>
+                <ul className="space-y-3">{list.map((s) => <SessionCard key={s.id} s={s} />)}</ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }

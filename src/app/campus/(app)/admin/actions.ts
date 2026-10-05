@@ -2,122 +2,126 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getCurrentProfile } from "@/lib/campus/auth";
-import { fromLocalInput } from "@/lib/campus/time";
 import { getProgram } from "@/data/programs";
-import { createClient } from "@/lib/supabase/server";
+import { fromLocalInput } from "@/lib/campus/time";
+import { addSessions, createCohort, createStaffAccount, enrollManual, setCohortActive, setEnrollmentStatus, setRoleByCedula } from "@/server/campus";
+import { getDb } from "@/server/db";
+import { normalizeCedula } from "@/server/security";
+import type { Role } from "@/server/users";
+import { baseUrl, getCurrentUser } from "@/server/web";
 import type { FormState } from "../../actions";
 
 const SEDES = ["Bogotá", "Cajicá", "Tabío", "Online"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const text = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
-/** Toda acción de administración exige rol admin en el servidor (la base de datos lo exige también). */
+/** Toda acción de administración exige rol admin en el servidor, sin importar lo que muestre la pantalla. */
 async function requireAdmin() {
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/campus/ingresar");
-  if (profile.role !== "admin") redirect("/campus");
-  return createClient();
+  const user = await getCurrentUser();
+  if (!user) redirect("/campus/ingresar");
+  if (user.role !== "admin") redirect("/campus");
+  return user;
 }
 
-export async function createCohort(_prev: FormState, fd: FormData): Promise<FormState> {
-  const supabase = await requireAdmin();
+export async function createCohortAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  await requireAdmin();
   const programSlug = text(fd, "program_slug");
   const name = text(fd, "name").slice(0, 120);
   const sede = text(fd, "sede");
-  const teacherId = text(fd, "teacher_id");
-  const startsOn = text(fd, "starts_on");
-
   if (!getProgram(programSlug)) return { error: "Elige un programa." };
   if (!name) return { error: "Escribe un nombre para la cohorte." };
   if (!SEDES.includes(sede)) return { error: "Elige una sede." };
 
-  const { data, error } = await supabase
-    .from("cohorts")
-    .insert({ program_slug: programSlug, name, sede, teacher_id: teacherId || null, starts_on: startsOn || null })
-    .select("id")
-    .single();
-  if (error || !data) return { error: "No pudimos crear la cohorte." };
-
+  const id = await createCohort(getDb(), {
+    programSlug,
+    name,
+    sede,
+    teacherId: text(fd, "teacher_id") || null,
+    startsOn: text(fd, "starts_on") || null,
+  });
   revalidatePath("/campus/admin");
-  redirect(`/campus/admin/cohortes/${data.id}`);
+  redirect(`/campus/admin/cohortes/${id}`);
 }
 
-export async function addSessions(_prev: FormState, fd: FormData): Promise<FormState> {
-  const supabase = await requireAdmin();
-  const cohortId = text(fd, "cohort_id");
+export async function addSessionsAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  await requireAdmin();
   const title = text(fd, "title").slice(0, 160);
   const start = fromLocalInput(text(fd, "starts_at"));
   const end = fromLocalInput(text(fd, "ends_at"));
-  const weeks = Math.min(40, Math.max(1, Number.parseInt(text(fd, "weeks"), 10) || 1));
-
   if (!title) return { error: "Escribe el título de la clase." };
   if (!start || !end) return { error: "Revisa la fecha y la hora de inicio y de fin." };
   if (new Date(end) <= new Date(start)) return { error: "La hora de fin debe ser después de la de inicio." };
 
-  // Colombia no cambia de hora en el año, así que sumar 7 días exactos mantiene la misma hora.
-  const WEEK = 7 * 24 * 3600_000;
-  const rows = Array.from({ length: weeks }, (_, i) => ({
-    cohort_id: cohortId,
-    title: weeks > 1 ? `${title} (${i + 1}/${weeks})` : title,
-    starts_at: new Date(new Date(start).getTime() + i * WEEK).toISOString(),
-    ends_at: new Date(new Date(end).getTime() + i * WEEK).toISOString(),
+  const cohortId = text(fd, "cohort_id");
+  const n = await addSessions(getDb(), {
+    cohortId,
+    title,
+    startsAt: start,
+    endsAt: end,
+    weeks: Number.parseInt(text(fd, "weeks"), 10) || 1,
     location: text(fd, "location") || null,
-    online_url: text(fd, "online_url") || null,
-  }));
-
-  const { error } = await supabase.from("sessions").insert(rows);
-  if (error) return { error: "No pudimos crear las clases." };
-
+    onlineUrl: text(fd, "online_url") || null,
+  });
   revalidatePath(`/campus/admin/cohortes/${cohortId}`);
-  return { message: `✓ ${rows.length === 1 ? "Clase creada" : `${rows.length} clases creadas`}.` };
+  return { message: `✓ ${n === 1 ? "Clase creada" : `${n} clases creadas`}.` };
 }
 
-export async function enrollStudent(_prev: FormState, fd: FormData): Promise<FormState> {
-  const supabase = await requireAdmin();
-  const cohortId = text(fd, "cohort_id");
+export async function enrollManualAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  await requireAdmin();
+  const cedula = normalizeCedula(text(fd, "cedula"));
   const email = text(fd, "email").toLowerCase();
-  if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido." };
+  if (!cedula) return { error: "Escribe una cédula válida (solo números)." };
+  if (email && !EMAIL_RE.test(email)) return { error: "El correo no es válido." };
 
-  const { data: student } = await supabase.from("profiles").select("id").eq("email", email).maybeSingle();
-  if (!student) return { error: "Esa persona aún no ha entrado al campus. Pídele que ingrese una vez con su correo en /campus/ingresar." };
-
-  const { error } = await supabase
-    .from("enrollments")
-    .upsert({ cohort_id: cohortId, student_id: student.id, status: "active" });
-  if (error) return { error: "No pudimos inscribirla." };
-
+  const cohortId = text(fd, "cohort_id");
+  const r = await enrollManual(getDb(), { cohortId, cedula, fullName: text(fd, "full_name"), email }, await baseUrl());
+  if (!r.ok) return { error: r.error };
   revalidatePath(`/campus/admin/cohortes/${cohortId}`);
-  return { message: "✓ Inscripción guardada." };
+  return { message: r.created ? "✓ Cuenta creada y estudiante inscrita. Le enviamos el paso a paso por correo." : "✓ Estudiante inscrita." };
 }
 
-export async function setEnrollmentStatus(fd: FormData) {
-  const supabase = await requireAdmin();
-  const cohortId = text(fd, "cohort_id");
+export async function setEnrollmentStatusAction(fd: FormData) {
+  await requireAdmin();
   const status = text(fd, "status");
-  if (!["active", "paused", "cancelled"].includes(status)) return;
-  await supabase.from("enrollments").update({ status }).eq("cohort_id", cohortId).eq("student_id", text(fd, "student_id"));
+  if (status !== "active" && status !== "paused" && status !== "cancelled") return;
+  const cohortId = text(fd, "cohort_id");
+  await setEnrollmentStatus(getDb(), cohortId, text(fd, "user_id"), status);
   revalidatePath(`/campus/admin/cohortes/${cohortId}`);
 }
 
-export async function setCohortActive(fd: FormData) {
-  const supabase = await requireAdmin();
+export async function setCohortActiveAction(fd: FormData) {
+  await requireAdmin();
   const cohortId = text(fd, "cohort_id");
-  await supabase.from("cohorts").update({ active: text(fd, "active") === "true" }).eq("id", cohortId);
+  await setCohortActive(getDb(), cohortId, text(fd, "active") === "true");
   revalidatePath(`/campus/admin/cohortes/${cohortId}`);
   revalidatePath("/campus/admin");
 }
 
-export async function setRole(_prev: FormState, fd: FormData): Promise<FormState> {
-  const supabase = await requireAdmin();
-  const email = text(fd, "email").toLowerCase();
+export async function setRoleAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const admin = await requireAdmin();
+  const cedula = normalizeCedula(text(fd, "cedula"));
   const role = text(fd, "role");
-  if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido." };
-  if (!["student", "teacher", "admin"].includes(role)) return { error: "Elige un rol." };
+  if (!cedula) return { error: "Escribe una cédula válida." };
+  if (role !== "student" && role !== "teacher" && role !== "admin") return { error: "Elige un rol." };
 
-  const { error } = await supabase.rpc("admin_set_role", { p_email: email, p_role: role });
-  if (error) return { error: error.message };
-
+  const r = await setRoleByCedula(getDb(), admin, cedula, role as Role);
+  if (!r.ok) return { error: r.error };
   revalidatePath("/campus/admin");
   return { message: "✓ Rol actualizado." };
+}
+
+export async function createStaffAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const admin = await requireAdmin();
+  const cedula = normalizeCedula(text(fd, "cedula"));
+  const email = text(fd, "email").toLowerCase();
+  const fullName = text(fd, "full_name").slice(0, 120);
+  const role = text(fd, "role") === "admin" ? "admin" : "teacher";
+  if (!cedula) return { error: "Escribe una cédula válida (solo números)." };
+  if (!fullName) return { error: "Escribe el nombre." };
+  if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido." };
+
+  const r = await createStaffAccount(getDb(), admin, { cedula, fullName, email, role }, await baseUrl());
+  if (!r.ok) return { error: r.error };
+  revalidatePath("/campus/admin");
+  return { message: "✓ Cuenta creada. Le enviamos su acceso por correo." };
 }

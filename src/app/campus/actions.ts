@@ -1,111 +1,157 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { canTeach, getCurrentProfile } from "@/lib/campus/auth";
-import { processPendingDeliveries } from "@/lib/campus/dispatch";
 import { normalizeWhatsapp } from "@/lib/campus/phone";
 import { fromLocalInput } from "@/lib/campus/time";
-import { isSupabaseConfigured, siteUrl } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
+import { consumePasswordReset, createPasswordReset, login, peekPasswordReset } from "@/server/auth";
+import { markAllRead, processPendingDeliveries, rescheduleSession, updateProfile } from "@/server/campus";
+import { getDb } from "@/server/db";
+import { sendEmail } from "@/server/outbox";
+import { hashToken, normalizeCedula, validateNewPassword, verifyPassword } from "@/server/security";
+import { passwordResetEmail } from "@/server/templates";
+import { findUserByCedula, getPasswordHash, setPassword } from "@/server/users";
+import { baseUrl, clientIp, currentSessionToken, endSession, getCurrentUser, startSession } from "@/server/web";
 
 export interface FormState {
   error?: string;
   message?: string;
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const text = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 
-export async function sendMagicLink(_prev: FormState, formData: FormData): Promise<FormState> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido." };
-  if (!isSupabaseConfigured()) return { error: "El campus se está configurando. Inténtalo más tarde." };
-
-  const origin = (await headers()).get("origin") ?? siteUrl();
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: `${origin}/campus/callback` },
-  });
-  if (error) return { error: "No pudimos enviar el enlace. Inténtalo de nuevo en unos minutos." };
-  return { message: `Te enviamos un enlace a ${email}. Ábrelo desde este mismo dispositivo para entrar.` };
+export async function loginAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const result = await login(getDb(), text(fd, "cedula"), text(fd, "password"), await clientIp());
+  if (!result.ok) {
+    if (result.reason === "locked") return { error: "Demasiados intentos fallidos. Espera 15 minutos o recupera tu contraseña." };
+    if (result.reason === "bad-input") return { error: "Escribe tu cédula (solo números) y tu contraseña." };
+    return { error: "La cédula o la contraseña no son correctas." };
+  }
+  await startSession(result.token);
+  redirect(result.user.must_change_password ? "/campus/cambiar-clave" : "/campus");
 }
 
-export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+export async function logoutAction() {
+  await endSession();
   redirect("/campus/ingresar");
 }
 
-export async function updateProfile(_prev: FormState, formData: FormData): Promise<FormState> {
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/campus/ingresar");
+/** Primer ingreso (contraseña temporal) o cambio voluntario. En el cambio voluntario se pide la contraseña actual. */
+export async function changePasswordAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  const token = await currentSessionToken();
+  if (!user || !token) redirect("/campus/ingresar");
 
-  const fullName = String(formData.get("full_name") ?? "").trim().slice(0, 120);
-  const rawPhone = String(formData.get("whatsapp_phone") ?? "").trim();
-  const notifyEmail = formData.get("notify_email") === "on";
-  const notifyWhatsapp = formData.get("notify_whatsapp") === "on";
+  const next = text(fd, "new_password");
+  if (next !== text(fd, "confirm_password")) return { error: "Las dos contraseñas nuevas no coinciden." };
+  const problem = validateNewPassword(next, user.cedula);
+  if (problem) return { error: problem };
+
+  const db = getDb();
+  const currentHash = await getPasswordHash(db, user.id);
+  if (await verifyPassword(next, currentHash ?? "")) return { error: "Elige una contraseña diferente a la actual." };
+  if (!user.must_change_password) {
+    if (!(await verifyPassword(text(fd, "current_password"), currentHash ?? ""))) return { error: "Tu contraseña actual no es correcta." };
+  }
+
+  await setPassword(db, user.id, next, hashToken(token));
+  redirect("/campus?bienvenida=1");
+}
+
+/** Siempre responde lo mismo, exista o no la cuenta, para no revelar quién está registrado. */
+export async function recoverAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const generic = { message: "Si los datos coinciden con una cuenta, te enviamos un correo con el enlace para crear una contraseña nueva." };
+  const cedula = normalizeCedula(text(fd, "cedula"));
+  const email = text(fd, "email").trim().toLowerCase();
+  if (!cedula || !email) return { error: "Escribe tu cédula y el correo con el que te inscribiste." };
+
+  const db = getDb();
+  const user = await findUserByCedula(db, cedula);
+  if (user && user.email.toLowerCase() === email) {
+    const token = await createPasswordReset(db, user.id);
+    await sendEmail(db, { to: user.email, ...passwordResetEmail({ fullName: user.full_name, resetUrl: `${await baseUrl()}/campus/restablecer?token=${token}` }) });
+  }
+  return generic;
+}
+
+export async function resetPasswordAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const token = text(fd, "token");
+  const next = text(fd, "new_password");
+  if (next !== text(fd, "confirm_password")) return { error: "Las dos contraseñas no coinciden." };
+
+  const db = getDb();
+  if (!(await peekPasswordReset(db, token))) return { error: "Este enlace ya no es válido. Pide uno nuevo." };
+  const userId = await consumePasswordReset(db, token);
+  if (!userId) return { error: "Este enlace ya no es válido. Pide uno nuevo." };
+
+  const row = await db.get<{ cedula: string }>("SELECT cedula FROM users WHERE id = ?", [userId]);
+  const problem = validateNewPassword(next, row?.cedula ?? "");
+  if (problem) {
+    // El enlace ya se consumió: se genera otro para que pueda corregir sin pedirlo de nuevo.
+    const again = await createPasswordReset(db, userId);
+    redirect(`/campus/restablecer?token=${again}&error=${encodeURIComponent(problem)}`);
+  }
+  await setPassword(db, userId, next);
+  redirect("/campus/ingresar?clave=ok");
+}
+
+export async function updateProfileAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/campus/ingresar");
+
+  const fullName = text(fd, "full_name").trim().slice(0, 120);
+  const rawPhone = text(fd, "whatsapp_phone").trim();
+  const notifyEmail = fd.get("notify_email") === "on";
+  const notifyWhatsapp = fd.get("notify_whatsapp") === "on";
 
   const phone = rawPhone ? normalizeWhatsapp(rawPhone) : null;
   if (rawPhone && !phone) return { error: "El número de WhatsApp no es válido. Ejemplo: 311 674 1900" };
   if (notifyWhatsapp && !phone) return { error: "Para recibir avisos por WhatsApp escribe tu número." };
   if (!fullName) return { error: "Escribe tu nombre." };
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("profiles")
-    .update({ full_name: fullName, whatsapp_phone: phone, notify_email: notifyEmail, notify_whatsapp: notifyWhatsapp })
-    .eq("id", profile.id);
-  if (error) return { error: "No pudimos guardar tus datos. Inténtalo de nuevo." };
-
+  await updateProfile(getDb(), user.id, { fullName, phone, notifyEmail, notifyWhatsapp });
   revalidatePath("/campus", "layout");
   return { message: "Datos guardados." };
 }
 
-export async function markAllRead() {
-  const supabase = await createClient();
-  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).is("read_at", null);
+export async function markAllReadAction() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/campus/ingresar");
+  await markAllRead(getDb(), user.id);
   revalidatePath("/campus", "layout");
 }
 
-export async function rescheduleSession(_prev: FormState, formData: FormData): Promise<FormState> {
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/campus/ingresar");
-  if (!canTeach(profile)) return { error: "Solo las profesoras pueden cambiar horarios." };
+export async function rescheduleAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/campus/ingresar");
 
-  const sessionId = String(formData.get("session_id") ?? "");
-  const startsAt = fromLocalInput(String(formData.get("starts_at") ?? ""));
-  const endsAt = fromLocalInput(String(formData.get("ends_at") ?? ""));
-  const status = formData.get("status") === "cancelled" ? "cancelled" : "scheduled";
-  const reason = String(formData.get("reason") ?? "").trim().slice(0, 500);
-
+  const startsAt = fromLocalInput(text(fd, "starts_at"));
+  const endsAt = fromLocalInput(text(fd, "ends_at"));
   if (!startsAt || !endsAt) return { error: "Revisa la fecha y la hora de inicio y de fin." };
-  if (new Date(endsAt) <= new Date(startsAt)) return { error: "La hora de fin debe ser después de la de inicio." };
-  if (reason.length < 3) return { error: "Cuéntale a tus estudiantes el motivo del cambio." };
 
-  const supabase = await createClient();
-  const { data: notified, error } = await supabase.rpc("reschedule_session", {
-    p_session: sessionId,
-    p_starts_at: startsAt,
-    p_ends_at: endsAt,
-    p_location: String(formData.get("location") ?? ""),
-    p_online_url: String(formData.get("online_url") ?? ""),
-    p_status: status,
-    p_reason: reason,
+  const db = getDb();
+  const result = await rescheduleSession(db, user, {
+    sessionId: text(fd, "session_id"),
+    startsAt,
+    endsAt,
+    location: text(fd, "location"),
+    onlineUrl: text(fd, "online_url"),
+    status: text(fd, "status") === "cancelled" ? "cancelled" : "scheduled",
+    reason: text(fd, "reason").slice(0, 500),
   });
-  if (error) return { error: error.message || "No pudimos guardar el cambio." };
+  if (!result.ok) return { error: result.error };
 
   // Los correos y WhatsApp salen después de responder, para que la profesora no espere.
+  const base = await baseUrl();
   after(async () => {
     try {
-      await processPendingDeliveries();
+      await processPendingDeliveries(db, base);
     } catch (e) {
       console.error("No se pudieron procesar los avisos", e);
     }
   });
 
   revalidatePath("/campus", "layout");
-  redirect(`/campus/profesor?guardado=${Number(notified) || 0}`);
+  redirect(`/campus/profesor?guardado=${result.notified}`);
 }

@@ -1,72 +1,64 @@
-# Campus virtual: guía de puesta en marcha
+# Campus virtual y pagos
 
-Qué hace: las estudiantes entran con un enlace que llega a su correo (sin contraseña), ven su horario y
-sus avisos. Las profesoras mueven o cancelan sus clases; al guardar, cada estudiante inscrita recibe un
-aviso en la plataforma y, según sus preferencias, por correo y por WhatsApp.
+## Cómo funciona de principio a fin
 
-## 1. Crear el proyecto en Supabase (una sola vez)
+1. **Carrito:** la persona agrega programas. Los descuentos se calculan en el servidor (certificaciones 15 %, talleres 10 %,
+   retiros solo con cupón).
+2. **Checkout** (`/checkout`): escribe nombre, **cédula**, correo y WhatsApp (opcional) y acepta los términos.
+3. **Pago:** hoy es una pasarela de **demostración** (`/pago/demo/…`) sin dinero real ni datos de tarjeta. Con Bold será la
+   misma lógica: la pasarela confirma el pago y se ejecuta `completeOrder()` en [src/server/orders.ts](../src/server/orders.ts).
+4. **Al confirmarse el pago**, de una sola vez y sin duplicar si la pasarela avisa dos veces:
+   - se crea la cuenta del campus con la cédula (o se reutiliza si ya existía),
+   - se inscribe a la persona en cada programa y en un grupo abierto, si lo hay,
+   - se envía un **correo con el paso a paso** y una contraseña temporal.
+5. **Primer ingreso** (`/campus/ingresar`): cédula + contraseña temporal. El campus **obliga a crear una contraseña propia**
+   antes de mostrar nada.
+6. **Acceso:** al entrar se consulta la base de datos. Solo ve el contenido quien tiene una **inscripción activa** (pago
+   confirmado o inscripción manual). Sin ella ve «Aún no tienes un programa activo».
 
-1. Crear una cuenta y un proyecto en https://supabase.com (región cercana, por ejemplo São Paulo).
-2. En **SQL Editor** pegar y ejecutar (**Run**), en este orden, los dos archivos:
-   [0001_campus.sql](../supabase/migrations/0001_campus.sql) y luego [0002_admin.sql](../supabase/migrations/0002_admin.sql).
-3. En **Project Settings → API** copiar:
-   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
-   - Publishable (anon) key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - Service role key → `SUPABASE_SERVICE_ROLE_KEY` (**secreta**: solo en el servidor, nunca en el navegador ni en GitHub)
-4. En **Authentication → URL Configuration**:
-   - Site URL: la dirección final del sitio.
-   - Redirect URLs: agregar `https://TU-DOMINIO/campus/callback` y `http://localhost:3000/campus/callback`.
-5. En **Authentication → SMTP Settings** conectar Resend (el correo gratuito de Supabase solo envía unos pocos al día).
+## Roles
 
-Las llaves van en `.env.local` (en tu equipo) y en las variables de entorno del hosting. Nunca se suben al repositorio.
+- **Estudiante:** ve sus programas, su horario, sus avisos y su perfil.
+- **Profesora:** además ve «Mis clases» y puede **mover o cancelar** una clase con un motivo. Se avisa a cada estudiante
+  inscrita en el campus, por correo y por WhatsApp (según sus preferencias).
+- **Administradora:** además tiene «Administración»: crea cohortes y clases (también repetidas cada semana), inscribe
+  manualmente (por ejemplo pagos por transferencia: si la cédula no tiene cuenta, la crea y envía el acceso), cambia
+  inscripciones a activa/pausada/cancelada y crea cuentas de profesoras.
 
-## 2. Correo (Resend)
+## Seguridad
 
-1. Cuenta en https://resend.com y verificar el dominio (registros DNS que debe agregar quien administre el dominio).
-2. `RESEND_API_KEY` y `RESEND_FROM` (por ejemplo `Fullness Camp <avisos@fullnesscampinternacional.com>`).
+- Contraseñas con *hash* (scrypt); nunca se guardan ni se muestran. La temporal solo viaja en el correo de bienvenida.
+- Bloqueo de 15 minutos tras 5 intentos fallidos por cédula (20 por IP). Mismo mensaje si la cédula no existe.
+- Cookie de sesión `httpOnly`, `sameSite=lax` y `secure` en producción. La sesión se valida contra la base de datos en cada
+  visita y se cierran las demás sesiones al cambiar la contraseña.
+- Recuperar contraseña: enlace de un solo uso que vence en 1 hora; la respuesta es la misma exista o no la cuenta.
+- Todas las acciones de profesoras y administradoras se verifican **en el servidor**, no solo en la pantalla.
+- Los precios nunca vienen del navegador: el servidor los recalcula con el catálogo.
 
-## 3. WhatsApp (Meta Cloud API)
+## Demostración
 
-1. Cuenta de Meta Business verificada y una app con WhatsApp; número de teléfono del negocio.
-2. Crear y enviar a aprobación esta **plantilla** (categoría *Utilidad*, idioma *Español*), nombre `cambio_de_horario`:
+Con `DEMO_MODE=true` (solo en tu computador, **nunca en producción**):
 
-   > Hola {{1}}, tu clase {{2}} {{3}}. Revisa tu horario en el campus de Fullness Camp.
+- `/pago/demo/…` simula el pago (aprobado o rechazado).
+- `/demo/bandeja` muestra los correos y WhatsApp que el sistema habría enviado.
 
-   Ejemplo de variables: `María` / `"Hatha Vinyasa"` / `ahora es el Jueves, 8 de octubre, 6:00 p. m. – 8:00 p. m. en Sede Bogotá. Motivo: cruce de agenda`.
-3. Variables: `WHATSAPP_TOKEN` (token permanente del usuario del sistema), `WHATSAPP_PHONE_NUMBER_ID`.
+Preparar datos: `npm run db:reset` y luego abrir el sitio con `npm run dev`. Las cuentas de demostración quedan en
+`data/demo-credenciales.txt`.
 
-Mientras Resend o WhatsApp no estén configurados, el cambio de horario igual se guarda y se avisa dentro de la
-plataforma; los envíos externos quedan marcados como "omitidos".
+## Avisos reales (cuando haya cuentas)
 
-## 4. Primera administradora y panel de administración
+- **Correo (Resend):** `RESEND_API_KEY` y `RESEND_FROM`. Hay que verificar el dominio (registros DNS).
+- **WhatsApp (Meta Cloud API):** `WHATSAPP_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID`, más una **plantilla aprobada por Meta**
+  (categoría *Utilidad*, idioma *Español*) llamada `cambio_de_horario`:
 
-La primera administradora se crea **una sola vez** con SQL. Antes, esa persona debe entrar una vez al campus
-(`/campus/ingresar`) con su correo para que exista su perfil:
+  > Hola {{1}}, tu clase {{2}} {{3}}. Revisa tu horario en el campus de Fullness Camp.
 
-```sql
-update profiles set role = 'admin', full_name = 'Nombre Apellido' where email = 'admin@correo.com';
-```
-
-Desde ahí todo se hace en **/campus/admin**, sin SQL:
-
-- **Profesoras y administradoras:** dar o quitar el rol por correo (la persona debe haber entrado antes al campus).
-- **Cohortes:** crear una por programa, sede y profesora.
-- **Clases:** en cada cohorte, crear una clase o repetirla cada semana (por ejemplo 12 semanas) a la misma hora de Colombia.
-- **Estudiantes:** inscribir por correo y poner la inscripción en activa, pausada o cancelada. Las pausadas y
-  canceladas no reciben avisos.
-- Una clase creada se puede mover o cancelar con **Cambiar horario**, y eso avisa a las inscritas.
-
-Cuando esté el pago con Bold, las inscripciones se harán solas al pagar.
-
-## 5. Reintentos de envíos
-
-Si un correo o WhatsApp falla, se reintenta hasta 3 veces. Un cron debe llamar a
-`GET /api/notificaciones/procesar` con la cabecera `Authorization: Bearer <CRON_SECRET>`
-(Vercel lo envía solo si defines la variable `CRON_SECRET`).
+Sin esas llaves, los envíos solo quedan registrados en la bandeja. Si un envío falla se reintenta hasta 3 veces; un cron
+puede llamar a `GET /api/notificaciones/procesar` con `Authorization: Bearer <CRON_SECRET>`.
 
 ## Pruebas
 
-- `npm test`: precios, mensajes, horas de Colombia y teléfonos.
-- `npm run test:db`: levanta un PostgreSQL en memoria, aplica las migraciones y verifica 39 reglas de seguridad,
-  de roles y del cambio de horario (quién ve qué, que una estudiante no pueda volverse administradora, que solo la
-  profesora de la cohorte cambie sus clases, quién recibe aviso y por qué canal).
+- `npm test`: precios y descuentos, mensajes, horas de Colombia, teléfonos, contraseñas, ingreso con bloqueo, pedidos,
+  pago idempotente, creación de cuenta y recuperación de contraseña (29 pruebas).
+- Se probó además de punta a punta en un navegador real (24 comprobaciones): compra, correo, primer ingreso, cambio de
+  contraseña, acceso según pago, bloqueo por intentos, cambio de horario por una profesora y aviso a estudiantes.

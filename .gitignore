@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 _wp-backup
+
+# Datos locales (SQLite)
+/data/

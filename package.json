@@ -7,20 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test src/lib/*.test.ts src/lib/campus/*.test.ts",
-    "test:db": "node supabase/tests/campus.test.mjs"
+    "test": "node --test src/lib/*.test.ts src/lib/campus/*.test.ts src/server/*.test.ts",
+    "db:seed": "node scripts/seed-demo.ts",
+    "db:reset": "node scripts/seed-demo.ts --reset"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.117.2",
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.19.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

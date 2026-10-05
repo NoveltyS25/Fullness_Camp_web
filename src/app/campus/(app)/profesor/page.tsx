@@ -1,27 +1,18 @@
 import { redirect } from "next/navigation";
-import { SessionCard, type SessionRow } from "@/components/campus/SessionCard";
-import { canTeach, getCurrentProfile } from "@/lib/campus/auth";
+import { SessionCard, } from "@/components/campus/SessionCard";
 import { dayKey, formatDay } from "@/lib/campus/time";
-import { createClient } from "@/lib/supabase/server";
+import { getTeacherSessions, type SessionRow } from "@/server/campus";
+import { getDb } from "@/server/db";
+import { getCurrentUser } from "@/server/web";
 
 export const metadata = { title: "Mis clases" };
 
 export default async function MisClases(props: PageProps<"/campus/profesor">) {
-  const profile = await getCurrentProfile();
-  if (!profile || !canTeach(profile)) redirect("/campus");
+  const user = await getCurrentUser();
+  if (!user || (user.role !== "teacher" && user.role !== "admin")) redirect("/campus");
   const { guardado } = await props.searchParams;
 
-  const supabase = await createClient();
-  let query = supabase
-    .from("sessions")
-    .select("id, title, starts_at, ends_at, location, online_url, status, cohorts!inner(name, sede, teacher_id)")
-    .gte("ends_at", new Date().toISOString())
-    .order("starts_at")
-    .limit(100);
-  if (profile.role === "teacher") query = query.eq("cohorts.teacher_id", profile.id);
-  const { data } = await query.returns<SessionRow[]>();
-
-  const sessions = data ?? [];
+  const sessions = await getTeacherSessions(getDb(), user);
   const byDay = new Map<string, SessionRow[]>();
   for (const s of sessions) byDay.set(dayKey(s.starts_at), [...(byDay.get(dayKey(s.starts_at)) ?? []), s]);
 
@@ -48,9 +39,7 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
           {[...byDay.entries()].map(([key, list]) => (
             <section key={key} aria-labelledby={`d-${key}`}>
               <h2 id={`d-${key}`} className="mb-3 text-xl font-bold">{formatDay(list[0].starts_at)}</h2>
-              <ul className="space-y-3">
-                {list.map((s) => <SessionCard key={s.id} s={s} editHref={`/campus/profesor/sesion/${s.id}`} />)}
-              </ul>
+              <ul className="space-y-3">{list.map((s) => <SessionCard key={s.id} s={s} editHref={`/campus/profesor/sesion/${s.id}`} />)}</ul>
             </section>
           ))}
         </div>

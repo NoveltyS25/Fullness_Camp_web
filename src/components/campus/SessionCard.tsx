@@ -1,16 +1,6 @@
 import Link from "next/link";
 import { formatRange } from "@/lib/campus/time";
-
-export interface SessionRow {
-  id: string;
-  title: string;
-  starts_at: string;
-  ends_at: string;
-  location: string | null;
-  online_url: string | null;
-  status: "scheduled" | "cancelled";
-  cohorts: { name: string; sede: string } | null;
-}
+import type { SessionRow } from "@/server/campus";
 
 export function SessionCard({ s, editHref }: { s: SessionRow; editHref?: string }) {
   const cancelled = s.status === "cancelled";
@@ -22,7 +12,7 @@ export function SessionCard({ s, editHref }: { s: SessionRow; editHref?: string 
       </div>
       <p className="mt-1 text-lg font-medium">{formatRange(s.starts_at, s.ends_at)}</p>
       <p className="text-muted">
-        {s.cohorts ? `${s.cohorts.name} · ${s.cohorts.sede}` : ""}
+        {s.cohort_name} · {s.sede}
         {s.location ? ` · ${s.location}` : ""}
       </p>
       {s.online_url && !cancelled && (
@@ -32,9 +22,7 @@ export function SessionCard({ s, editHref }: { s: SessionRow; editHref?: string 
           </a>
         </p>
       )}
-      {editHref && (
-        <Link href={editHref} className="btn btn-secondary mt-4">Cambiar horario</Link>
-      )}
+      {editHref && <Link href={editHref} className="btn btn-secondary mt-4">Cambiar horario</Link>}
     </li>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { submitWith } from "@/lib/form";
 import type { FormState } from "@/app/campus/actions";
 
 export const inputClass = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-4 text-lg";
@@ -18,7 +19,7 @@ export function ActionForm({
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, {});
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={submitWith(formAction)} className="space-y-5">
       {children}
       <button type="submit" disabled={pending} className="btn btn-primary w-full sm:w-auto">
         {pending ? "Guardando…" : submitLabel}

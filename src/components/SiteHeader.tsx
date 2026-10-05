@@ -24,9 +24,11 @@ export function SiteHeader() {
             </Link>
           ))}
           <CartLink />
+          <Link href="/campus/ingresar" className="btn btn-primary ml-2 !min-h-12 !px-5">Campus virtual</Link>
         </nav>
 
         <div className="flex items-center gap-1 md:hidden">
+          <Link href="/campus/ingresar" className="btn btn-primary !min-h-12 !px-4 !py-2 text-base">Campus</Link>
           <CartLink />
           <details className="group relative">
             <summary className="grid h-12 w-12 cursor-pointer list-none place-items-center rounded-full text-clay-dark hover:bg-clay-soft [&::-webkit-details-marker]:hidden" aria-label="Abrir menú">

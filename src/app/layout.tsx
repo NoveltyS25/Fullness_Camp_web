@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
-import { Roboto, Roboto_Slab } from "next/font/google";
+import localFont from "next/font/local";
 import { CartProvider } from "@/lib/cart";
 import "./globals.css";
 
-const roboto = Roboto({
+// Fuentes alojadas en el propio sitio (más rápido, sin pedirle nada a Google en cada visita).
+const roboto = localFont({
+  src: "./fonts/Roboto-latin.woff2",
   variable: "--font-roboto",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: "400 700",
+  display: "swap",
 });
 
-const robotoSlab = Roboto_Slab({
+const robotoSlab = localFont({
+  src: "./fonts/RobotoSlab-latin.woff2",
   variable: "--font-roboto-slab",
-  subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: "400 700",
+  display: "swap",
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://fullnesscampinternacional.com";
