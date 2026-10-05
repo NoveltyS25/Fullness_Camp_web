@@ -61,3 +61,4 @@ se muestra en el sitio pero no se puede comprar.
   clara de cancelación y reembolso (la FAQ por ahora remite a una asesora).
 - **GA4 / Tag Manager / píxel de Meta:** instalar con el consentimiento de cookies correspondiente (los eventos ya están listos).
 - **Descripción de los retiros** (Abundancia, India) y de las demás páginas: Nosotros, Sedes, Retiros, Talleres y Ashram.
+- **Reseñas de Google de las sedes:** crear la clave de la API de Google Places (ver docs/LANDINGS.md) y confirmar los enlaces de Maps de las sedes de Cajicá y Bogotá (solo se tiene el de Tabío).

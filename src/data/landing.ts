@@ -16,6 +16,15 @@ export interface Testimonial {
   author: string;
 }
 
+export type FactIcon = "clock" | "laptop" | "pin" | "calendar" | "award" | "users" | "gift" | "mountain";
+
+export interface Fact {
+  icon: FactIcon;
+  label: string;
+  value: string;
+  detail?: string;
+}
+
 export interface Landing {
   /** Frase corta sobre el título (tipo de programa y duración). */
   kicker: string;
@@ -25,13 +34,14 @@ export interface Landing {
   proof: string[];
   heroImage: { src: string; alt: string; position?: string };
   seo: { title: string; description: string };
-  /** Datos rápidos: duración, modalidad, etc. */
-  facts: { label: string; value: string }[];
+  /** Datos rápidos (4 por programa). Valor corto en una línea y, si ayuda, un detalle breve debajo. */
+  facts: Fact[];
   audience: string[];
   /** Quién NO necesita nada previo / aclaraciones para que la compra sea de buen ajuste. */
   prerequisites: string;
   outcomes: { title: string; text: string }[];
-  curriculum: { title: string; items: string[] }[];
+  /** Cada bloque se muestra como una pregunta (question) que se abre con el detalle. */
+  curriculum: { title: string; question?: string; items: string[] }[];
   teachers: Teacher[];
   schedule: { title: string; lines: string[] }[];
   includes: string[];
@@ -139,10 +149,10 @@ export const LANDINGS: Record<string, Landing> = {
       description: "Formación de instructores de Hatha Vinyasa Yoga y Meditación de 300 horas con diploma internacional. Clases online y presenciales en Bogotá, Cajicá y Tabío.",
     },
     facts: [
-      { label: "Duración", value: "300 horas" },
-      { label: "Modalidad", value: "Teoría online · práctica online o presencial" },
-      { label: "Sedes", value: "Bogotá, Cajicá, Tabío" },
-      { label: "Retiro", value: "1 fin de semana (3 días) en Tabío" },
+      { icon: "clock", label: "Duración", value: "300 horas", detail: "Teoría y práctica" },
+      { icon: "laptop", label: "Modalidad", value: "Online y presencial", detail: "Teoría online · práctica a elegir" },
+      { icon: "pin", label: "Sedes", value: "Bogotá, Cajicá, Tabío", detail: "Clases prácticas presenciales" },
+      { icon: "mountain", label: "Retiro", value: "3 días en Tabío", detail: "Un fin de semana" },
     ],
     audience: [
       "Quieres no solo enseñar yoga, sino transformar tu estilo de vida y conocerte a fondo.",
@@ -162,6 +172,7 @@ export const LANDINGS: Record<string, Landing> = {
     curriculum: [
       {
         title: "Yoga",
+        question: "¿Qué voy a aprender de yoga?",
         items: [
           "Historia y filosofía",
           "Biomecánica aplicada al yoga",
@@ -176,6 +187,7 @@ export const LANDINGS: Record<string, Landing> = {
       },
       {
         title: "Meditación",
+        question: "¿Qué técnicas de meditación voy a aprender?",
         items: [
           "Cuerpo energético: chakras, nadis y energía kundalini",
           "Cuerpo mental: cómo funciona nuestro cerebro y técnicas de meditación",
@@ -185,7 +197,7 @@ export const LANDINGS: Record<string, Landing> = {
           "Técnicas de empoderamiento y amor propio",
         ],
       },
-      { title: "Introducción a la medicina ayurveda", items: ["Medicina tradicional de la India", "Constitución (dosha) y hábitos de vida", "Alimentación ancestral del territorio andino"] },
+      { title: "Introducción a la medicina ayurveda", question: "¿Qué voy a aprender de ayurveda?", items: ["Medicina tradicional de la India", "Constitución (dosha) y hábitos de vida", "Alimentación ancestral del territorio andino"] },
     ],
     teachers: [TEAM.lila, TEAM.william],
     schedule: HORARIO_BASE,
@@ -204,8 +216,6 @@ export const LANDINGS: Record<string, Landing> = {
       "Realizar la tesina y las demás tareas.",
     ],
     faq: [
-      { q: "¿Necesito experiencia previa en yoga?", a: "No. Nuestros programas son multinivel: se adaptan tanto a quien empieza desde cero como a quien ya practica. Solo hacen falta las ganas de aprender." },
-      { q: "¿Cómo son las clases?", a: "La teoría es 100 % online por Google Meet. Las clases prácticas puedes tomarlas online o presenciales en la sede de Bogotá, Cajicá o Tabío, según tu horario." },
       { q: "¿Qué diploma recibo?", a: "Un diploma internacional avalado por Yoga Alliance, que te permite dar clases y guiar la práctica de otras personas." },
       FAQ_PAGO,
       FAQ_DESPUES,
@@ -227,10 +237,10 @@ export const LANDINGS: Record<string, Landing> = {
       description: "Formación de instructores de Hatha Vinyasa Yoga y Pilates de 250 horas con doble titulación y enfoque biomecánico. Online y presencial en Bogotá, Cajicá y Tabío.",
     },
     facts: [
-      { label: "Duración", value: "250 horas" },
-      { label: "Titulación", value: "Yoga y Pilates (doble)" },
-      { label: "Modalidad", value: "Teoría online · práctica online o presencial" },
-      { label: "Sedes", value: "Bogotá, Cajicá, Tabío" },
+      { icon: "clock", label: "Duración", value: "250 horas", detail: "Teoría y práctica" },
+      { icon: "award", label: "Titulación", value: "Doble titulación", detail: "Yoga y Pilates" },
+      { icon: "laptop", label: "Modalidad", value: "Online y presencial", detail: "Teoría online · práctica a elegir" },
+      { icon: "pin", label: "Sedes", value: "Bogotá, Cajicá, Tabío", detail: "Clases prácticas presenciales" },
     ],
     audience: [
       "Quieres ampliar tu oferta profesional con dos disciplinas: yoga y pilates.",
@@ -250,6 +260,7 @@ export const LANDINGS: Record<string, Landing> = {
     curriculum: [
       {
         title: "Contenido de yoga",
+        question: "¿Qué voy a aprender de yoga?",
         items: [
           "Historia y filosofía; biomecánica aplicada al yoga",
           "Asanas: alineación, beneficios y secuencias",
@@ -263,6 +274,7 @@ export const LANDINGS: Record<string, Landing> = {
       },
       {
         title: "Pilates: «El arte del control»",
+        question: "¿Qué voy a aprender de pilates?",
         items: [
           "Los seis principios básicos: centro de energía, concentración, control, precisión, respiración y fluidez del movimiento",
           "Los seis conceptos fundamentales: posición pilates, línea central, articulación vértebra por vértebra y curva C",
@@ -276,6 +288,7 @@ export const LANDINGS: Record<string, Landing> = {
       },
       {
         title: "Cómo se reparten las horas",
+        question: "¿Cómo se reparten las 250 horas?",
         items: [
           "Online (práctica y teoría): 140 horas",
           "Estudio de investigación: 56 horas (lecturas, documentales en la plataforma Gaia y trabajo final)",
@@ -298,9 +311,7 @@ export const LANDINGS: Record<string, Landing> = {
       "Realizar la tesina y las demás tareas (lecturas y documentales).",
     ],
     faq: [
-      { q: "¿Necesito saber pilates o yoga antes?", a: "No. Es una formación multinivel: sirve tanto si empiezas desde cero como si ya practicas. Solo hacen falta las ganas de aprender." },
       { q: "¿Qué obtengo al terminar?", a: "Una doble titulación en yoga y pilates, con aval internacional. Si cumples con todo, después de graduarte puedes seguir asistiendo a las clases activas de la escuela durante todo el año sin costo." },
-      { q: "¿Las clases son online o presenciales?", a: "La teoría es 100 % online. La práctica la eliges: online o presencial en Bogotá, Cajicá o Tabío." },
       FAQ_PAGO,
       FAQ_DESPUES,
       FAQ_LESION,
@@ -321,10 +332,10 @@ export const LANDINGS: Record<string, Landing> = {
       description: "Formación de Yoga Kids y metodologías alternativas para la infancia, con doble titulación en Yoga Prenatal. 200 horas, online, con respaldo médico.",
     },
     facts: [
-      { label: "Duración", value: "200 horas" },
-      { label: "Titulación", value: "Yoga Kids y Yoga Prenatal (doble)" },
-      { label: "Jornadas", value: "2 por semana: mañana o noche" },
-      { label: "Incluye", value: "Kit para vivir la experiencia en casa" },
+      { icon: "clock", label: "Duración", value: "200 horas", detail: "Certificación internacional" },
+      { icon: "award", label: "Titulación", value: "Doble titulación", detail: "Yoga Kids y Yoga Prenatal" },
+      { icon: "calendar", label: "Jornadas", value: "Mañana o noche", detail: "Lunes, miércoles y viernes" },
+      { icon: "gift", label: "Incluye", value: "Kit en casa", detail: "Para vivir la experiencia" },
     ],
     audience: [
       "Trabajas con población infantil: psicología, pedagogía, pediatría, preescolar o cuidado de niños.",
@@ -342,6 +353,7 @@ export const LANDINGS: Record<string, Landing> = {
     curriculum: [
       {
         title: "Temario",
+        question: "¿Qué temas voy a aprender?",
         items: [
           "Yoga gestacional y yoga post natal",
           "Ayurveda gestacional y ayurveda del puerperio",
@@ -367,7 +379,6 @@ export const LANDINGS: Record<string, Landing> = {
     requirements: [],
     faq: [
       { q: "¿Es solo para profesoras de yoga?", a: "No. Es ideal para profesores de preescolar y primaria, psicólogos, pediatras, fisioterapeutas y cuidadores, así como para quien quiera acercarse al yoga con niños." },
-      { q: "¿Qué horarios tiene?", a: "Hay dos jornadas entre semana y eliges una: mañanas (lunes, miércoles y viernes de 9 a. m. a 12 m.) o noches (lunes, miércoles y viernes de 6 a 9 p. m.)." },
       { q: "¿Qué recibo al terminar?", a: "Un diploma internacional con doble titulación: Yoga Kids y Yoga Prenatal." },
       FAQ_PAGO,
       FAQ_DESPUES,
@@ -387,10 +398,10 @@ export const LANDINGS: Record<string, Landing> = {
       description: "Taller de 9 sesiones para parejas: yoga prenatal, parto humanizado, lactancia y crianza respetuosa, con respaldo médico. Online y semipresencial.",
     },
     facts: [
-      { label: "Sesiones", value: "9 módulos" },
-      { label: "Horario", value: "Sábados, 8:00 a. m. a 12:00 m." },
-      { label: "Modalidad", value: "Online / semipresencial" },
-      { label: "Para quién", value: "Parejas (mamá y papá o acompañante)" },
+      { icon: "calendar", label: "Sesiones", value: "9 módulos", detail: "Con yoga, meditación y respiración" },
+      { icon: "clock", label: "Horario", value: "Sábados", detail: "8:00 a. m. a 12:00 m." },
+      { icon: "laptop", label: "Modalidad", value: "Online y semipresencial" },
+      { icon: "users", label: "Para quién", value: "Parejas", detail: "Mamá y papá o acompañante" },
     ],
     audience: [
       "Estás embarazada o planeando tu embarazo y quieres vivirlo de forma activa, consciente y amorosa.",
@@ -407,6 +418,7 @@ export const LANDINGS: Record<string, Landing> = {
     curriculum: [
       {
         title: "Los 9 módulos",
+        question: "¿Qué veremos en las 9 sesiones?",
         items: [
           "1. Maternidad consciente: sanación de mis ancestros y linaje femenino",
           "2. Canto carnático maternal: parir cantando",
@@ -426,7 +438,6 @@ export const LANDINGS: Record<string, Landing> = {
     requirements: [],
     faq: [
       { q: "¿El taller es solo para mujeres?", a: "No. Está diseñado para parejas: mamá y papá (o acompañante). La presencia activa de la pareja es parte fundamental del proceso." },
-      { q: "¿Cuánto cuesta?", a: "El valor es por pareja e incluye los materiales." },
       { q: "¿Reemplaza el curso psicoprofiláctico?", a: "El taller abarca los contenidos del curso convencional psicoprofiláctico, y además suma yoga, meditación y respiración en cada sesión." },
       FAQ_PAGO,
       FAQ_DESPUES,
@@ -446,10 +457,10 @@ export const LANDINGS: Record<string, Landing> = {
       description: "Maestría internacional de yoga y ayurveda para la mujer: salud hormonal, Rasayana (rejuvenecimiento), ciclo lunar y cosmética natural. Próxima cohorte por confirmar.",
     },
     facts: [
-      { label: "Duración", value: "500 horas (por confirmar)" },
-      { label: "Titulación", value: "Doble titulación internacional" },
-      { label: "Modalidad", value: "Online / semipresencial" },
-      { label: "Próxima cohorte", value: "Por confirmar" },
+      { icon: "clock", label: "Duración", value: "500 horas", detail: "Por confirmar" },
+      { icon: "award", label: "Titulación", value: "Doble titulación", detail: "Con aval internacional" },
+      { icon: "laptop", label: "Modalidad", value: "Online y semipresencial" },
+      { icon: "calendar", label: "Próxima cohorte", value: "Por confirmar", detail: "Déjanos tus datos y te avisamos" },
     ],
     audience: [
       "Deseas profundamente enriquecer y compartir tu experiencia de vida para que sirva de luz a otras mujeres.",
@@ -467,6 +478,7 @@ export const LANDINGS: Record<string, Landing> = {
     curriculum: [
       {
         title: "Módulos",
+        question: "¿Qué módulos tiene la maestría?",
         items: [
           "Módulo 1: Cuerpo físico (asanas y yoga de la alimentación), cuerpo energético (chakras, pranayamas y mudras) y plano mental (meditación e integración emocional)",
           "Módulo 2: Yoga gestacional y post natal, ayurveda durante la gestación y posturas de yoga",
@@ -502,10 +514,10 @@ export const LANDINGS: Record<string, Landing> = {
       description: "Inmersión de yoga en la naturaleza con certificación internacional de 200 horas, multinivel. Próxima fecha por confirmar.",
     },
     facts: [
-      { label: "Duración", value: "200 horas" },
-      { label: "Inmersión", value: "100 horas presenciales" },
-      { label: "Nivel", value: "Multinivel" },
-      { label: "Próxima fecha", value: "Por confirmar" },
+      { icon: "clock", label: "Duración", value: "200 horas", detail: "Certificación internacional" },
+      { icon: "mountain", label: "Inmersión", value: "100 horas", detail: "Presenciales" },
+      { icon: "users", label: "Nivel", value: "Multinivel", detail: "Sin experiencia previa" },
+      { icon: "calendar", label: "Próxima fecha", value: "Por confirmar", detail: "Déjanos tus datos y te avisamos" },
     ],
     audience: [
       "Quieres comenzar un camino de autoconocimiento y herramientas valiosas para tu bienestar.",
@@ -519,7 +531,7 @@ export const LANDINGS: Record<string, Landing> = {
       { title: "Alimentación ancestral", text: "Dos talleres de cocina con recetas prácticas y nutritivas para ti y tu familia." },
       { title: "Mente y emociones", text: "Conoces el mecanismo de tu mente y cómo abrazar e integrar tus emociones." },
     ],
-    curriculum: [{ title: "Qué incluye la formación", items: ["Clases teórico-prácticas: el porqué y el para qué de cada asana, pranayama, mudra y mantra", "Diseño de clases con objetivos claros", "Plataforma de encuentros en vivo previos y posteriores a la inmersión", "Suscripción a Gaia (6 meses sin costo adicional)"] }],
+    curriculum: [{ title: "Qué incluye la formación", question: "¿Qué voy a aprender en la inmersión?", items: ["Clases teórico-prácticas: el porqué y el para qué de cada asana, pranayama, mudra y mantra", "Diseño de clases con objetivos claros", "Plataforma de encuentros en vivo previos y posteriores a la inmersión", "Suscripción a Gaia (6 meses sin costo adicional)"] }],
     teachers: [TEAM.lila],
     schedule: [{ title: "Próxima inmersión", lines: ["Por confirmar. Déjanos tus datos y te avisamos."] }],
     includes: ["Memorias de la formación en PDF y «Yoga in Action» de Geeta S. Iyengar", "El Bhagavad Gita en PDF", "Kit de yoga"],
@@ -531,7 +543,6 @@ export const LANDINGS: Record<string, Landing> = {
     ],
     faq: [
       { q: "¿Cuándo es la próxima inmersión?", a: "Estamos confirmando fechas y lugar. Si dejas tus datos, te avisamos primero." },
-      { q: "¿Necesito experiencia?", a: "No. Es un programa multinivel." },
       FAQ_ASESORA,
     ],
     magazine: true,

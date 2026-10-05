@@ -3,11 +3,13 @@ import type { Landing } from "@/data/landing";
 import { isPurchasable, type Program } from "@/data/programs";
 import { itemParams } from "@/lib/analytics";
 import type { MagazineManifest } from "@/lib/magazine";
+import type { GoogleReviewsData } from "@/server/google-reviews";
 import { PAY_IN_FULL_PERCENT, formatCOP } from "@/lib/pricing";
 import { whatsappLink } from "@/lib/whatsapp";
 import { BuyNowButton } from "./BuyNowButton";
 import { LeadForm } from "./LeadForm";
 import { MagazineViewer } from "./MagazineViewer";
+import { FactGlyph } from "./FactGlyph";
 import { StickyCta } from "./StickyCta";
 import { TrackEvent } from "./TrackEvent";
 
@@ -27,11 +29,24 @@ function Section({ id, tone = "sand", children, label }: { id?: string; tone?: "
   );
 }
 
-const H2 = ({ id, children }: { id: string; children: React.ReactNode }) => (
-  <h2 id={`${id}-t`} className="mb-8 text-3xl font-bold sm:text-4xl md:mb-0">{children}</h2>
+const H2 = ({ id, children, center = false, sub }: { id: string; children: React.ReactNode; center?: boolean; sub?: string }) => (
+  <div className={`mb-10 ${center ? "mx-auto max-w-2xl text-center" : ""}`}>
+    <h2 id={`${id}-t`} className="text-3xl font-bold sm:text-4xl">{children}</h2>
+    {sub && <p className="mt-3 text-lg text-muted">{sub}</p>}
+  </div>
 );
 
-export function ProgramLanding({ program, landing, magazine }: { program: Program; landing: Landing; magazine: MagazineManifest | null }) {
+const Stars = ({ n }: { n: number }) => (
+  <span className="inline-flex gap-0.5 text-clay-dark" role="img" aria-label={`${n} de 5 estrellas`}>
+    {Array.from({ length: 5 }, (_, i) => (
+      <svg key={i} viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" className={i < Math.round(n) ? "fill-current" : "fill-clay-soft"}>
+        <path d="m12 2.8 2.8 5.9 6.4.9-4.6 4.5 1.1 6.4L12 17.4l-5.7 3.1 1.1-6.4L2.8 9.6l6.4-.9L12 2.8Z" />
+      </svg>
+    ))}
+  </span>
+);
+
+export function ProgramLanding({ program, landing, magazine, googleReviews }: { program: Program; landing: Landing; magazine: MagazineManifest | null; googleReviews: GoogleReviewsData | null }) {
   const buyable = isPurchasable(program);
   const percent = PAY_IN_FULL_PERCENT[program.category];
   const list = program.priceCOP ?? 0;
@@ -97,13 +112,19 @@ export function ProgramLanding({ program, landing, magazine }: { program: Progra
         <span id="hero-fin" aria-hidden="true" />
       </section>
 
-      {/* 2. Datos rápidos */}
+      {/* 2. Datos rápidos: cuatro tarjetas del mismo tamaño y con el mismo orden */}
       <section aria-label="Datos del programa" className="border-y border-clay-soft bg-white">
-        <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-5 px-5 py-8 md:grid-cols-4">
+        <dl className="mx-auto grid max-w-6xl grid-cols-1 gap-4 px-5 py-8 sm:grid-cols-2 lg:grid-cols-4">
           {landing.facts.map((f) => (
-            <div key={f.label}>
-              <dt className="text-sm font-medium uppercase tracking-wide text-muted">{f.label}</dt>
-              <dd className="text-lg font-bold text-clay-dark">{f.value}</dd>
+            <div key={f.label} className="flex items-start gap-4 rounded-2xl bg-sand p-5 lg:flex-col lg:gap-3">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-white text-clay-dark shadow-sm">
+                <FactGlyph name={f.icon} />
+              </span>
+              <div className="min-w-0">
+                <dt className="text-sm font-medium uppercase tracking-wide text-muted">{f.label}</dt>
+                <dd className="text-xl font-bold leading-snug text-clay-dark">{f.value}</dd>
+                {f.detail && <dd className="mt-0.5 text-base leading-snug text-muted">{f.detail}</dd>}
+              </div>
             </div>
           ))}
         </dl>
@@ -139,29 +160,60 @@ export function ProgramLanding({ program, landing, magazine }: { program: Progra
       </Section>
 
       {/* 5. Prueba social real */}
-      {landing.testimonials && landing.testimonials.length > 0 && (
+      {(googleReviews || (landing.testimonials && landing.testimonials.length > 0)) && (
         <Section id="opiniones" tone="white" label="opiniones">
-          <H2 id="opiniones">Lo que dicen quienes ya estudiaron con nosotras</H2>
-          <div className="grid gap-6 md:grid-cols-2">
-            {landing.testimonials.map((t) => (
-              <figure key={t.author} className="rounded-3xl border border-clay-soft bg-sand p-7">
-                <blockquote className="text-xl leading-relaxed">«{t.quote}»</blockquote>
-                <figcaption className="mt-4 font-medium text-clay-dark">{t.author}</figcaption>
-              </figure>
-            ))}
-          </div>
+          <H2 id="opiniones" center sub={googleReviews ? undefined : "Opiniones reales de nuestra comunidad en Google."}>
+            Lo que dicen quienes ya estudiaron con nosotras
+          </H2>
+
+          {googleReviews ? (
+            <>
+              {googleReviews.rating && (
+                <p className="mb-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-lg">
+                  <Stars n={googleReviews.rating} />
+                  <span className="text-2xl font-bold text-clay-dark">{googleReviews.rating.toLocaleString("es-CO", { minimumFractionDigits: 1 })}</span>
+                  <span className="text-muted">· {googleReviews.total.toLocaleString("es-CO")} reseñas en Google Maps</span>
+                </p>
+              )}
+              <div className="grid gap-6 md:grid-cols-2">
+                {googleReviews.reviews.map((r) => (
+                  <figure key={`${r.sede}-${r.author}`} className="flex flex-col rounded-3xl border border-clay-soft bg-sand p-7">
+                    <Stars n={r.rating} />
+                    <blockquote className="mt-3 flex-1 text-xl leading-relaxed">«{r.text}»</blockquote>
+                    <figcaption className="mt-4 font-medium text-clay-dark">
+                      {r.authorUrl ? <a href={r.authorUrl} target="_blank" rel="noopener noreferrer nofollow" className="underline">{r.author}</a> : r.author}
+                      <span className="font-normal text-muted"> · Sede {r.sede} · Reseña en Google</span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+              <p className="mt-8 flex flex-wrap items-center justify-center gap-3 text-center">
+                {googleReviews.places.filter((p) => p.mapsUrl).map((p) => (
+                  <a key={p.sede} href={p.mapsUrl!} target="_blank" rel="noopener noreferrer" className="btn btn-secondary !min-h-12">Ver reseñas de la sede {p.sede}</a>
+                ))}
+              </p>
+            </>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2">
+              {landing.testimonials?.map((t) => (
+                <figure key={t.author} className="rounded-3xl border border-clay-soft bg-sand p-7">
+                  <blockquote className="text-xl leading-relaxed">«{t.quote}»</blockquote>
+                  <figcaption className="mt-4 font-medium text-clay-dark">{t.author}</figcaption>
+                </figure>
+              ))}
+            </div>
+          )}
         </Section>
       )}
 
-      {/* 6. Temario */}
+      {/* 6. Qué vas a aprender: preguntas que se abren */}
       <Section id="temario" label="temario">
-        <div className="grid gap-4 md:grid-cols-[1fr_2fr] md:gap-12">
-        <H2 id="temario">Qué vas a aprender</H2>
-        <div className="space-y-3">
+        <H2 id="temario" center sub="Toca una pregunta para ver el detalle.">Qué vas a aprender</H2>
+        <div className="mx-auto max-w-3xl space-y-3">
           {landing.curriculum.map((block, i) => (
             <details key={block.title} open={i === 0} className="group rounded-2xl border border-clay-soft bg-white p-5">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-xl font-bold text-clay-dark [&::-webkit-details-marker]:hidden">
-                {block.title}
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-lg font-bold text-clay-dark sm:text-xl [&::-webkit-details-marker]:hidden">
+                {block.question ?? block.title}
                 <span aria-hidden="true" className="text-2xl transition group-open:rotate-45">+</span>
               </summary>
               <ul className="mt-3 list-disc space-y-2 pl-6 text-lg">
@@ -169,7 +221,6 @@ export function ProgramLanding({ program, landing, magazine }: { program: Progra
               </ul>
             </details>
           ))}
-        </div>
         </div>
       </Section>
 
@@ -271,11 +322,10 @@ export function ProgramLanding({ program, landing, magazine }: { program: Progra
         </Section>
       )}
 
-      {/* 11. Preguntas frecuentes */}
-      <Section id="preguntas" label="preguntas">
-        <div className="grid gap-4 md:grid-cols-[1fr_2fr] md:gap-12">
-        <H2 id="preguntas">Preguntas frecuentes</H2>
-        <div className="space-y-3">
+      {/* 11. Preguntas frecuentes (solo dudas de la compra; el contenido está en «Qué vas a aprender») */}
+      <Section id="preguntas" tone="soft" label="preguntas">
+        <H2 id="preguntas" center sub="Lo que más nos preguntan antes de inscribirse.">Preguntas frecuentes</H2>
+        <div className="mx-auto max-w-3xl space-y-3">
           {landing.faq.map((f) => (
             <details key={f.q} className="group rounded-2xl border border-clay-soft bg-white p-5">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-lg font-bold text-clay-dark [&::-webkit-details-marker]:hidden">
@@ -285,7 +335,6 @@ export function ProgramLanding({ program, landing, magazine }: { program: Progra
               <p className="mt-3 text-lg">{f.a}</p>
             </details>
           ))}
-        </div>
         </div>
       </Section>
 

@@ -13,13 +13,13 @@ Orden pensado para que quien llega decida con confianza, sin distracciones:
 2. **Datos rápidos:** duración, modalidad, sedes, retiro.
 3. **Para quién es** y qué pasa si no se tiene experiencia (filtra y tranquiliza).
 4. **Lo que vas a lograr** (resultados concretos, no adjetivos).
-5. **Opiniones reales** de Google (solo reseñas verdaderas del sitio anterior; si un programa no tiene, la sección no aparece).
-6. **Temario** en acordeón.
+5. **Opiniones reales de Google** de las sedes (ver abajo).
+6. **Qué vas a aprender:** título centrado y, debajo, preguntas que se abren («¿Qué voy a aprender de yoga?») con el detalle del temario.
 7. **Revista** (flipbook) del programa, en computador y celular.
 8. **Docentes** con foto y credenciales (cerca de las afirmaciones de calidad).
 9. **Horarios, qué incluye y requisitos para graduarte** (transparencia: menos compras con mala expectativa).
 10. **Inscripción:** precio de lista tachado, precio final, ahorro y cómo se paga. O, si el programa aún no abre, **lista de espera**.
-11. **Preguntas frecuentes** (resuelven objeciones: experiencia, pago, qué pasa después).
+11. **Preguntas frecuentes** (solo dudas de la compra: diploma, pago, qué pasa después, lesiones). El contenido del programa ya está en «Qué vas a aprender» y la experiencia previa en el recuadro de «Para quién es», así que no se repiten.
 12. **Cierre:** WhatsApp y formulario corto para quien todavía duda.
 
 En celular hay una **barra fija** con el precio y el botón, que aparece al bajar y se esconde al llegar a la inscripción.
@@ -84,3 +84,14 @@ lenta): rendimiento 91–96, accesibilidad 100, buenas prácticas 100, SEO 100.
 - **Fechas reales de cada cohorte** y cupos limitados **solo si son verdad**: la urgencia inventada resta confianza.
 - **Una página de reembolsos y cancelación** clara, publicada junto a las políticas legales.
 - **Pruebas A/B** de un solo cambio por mes (título, foto de la portada, texto del botón), midiendo inscripciones y no solo clics.
+
+## Reseñas de Google de las sedes
+
+La sección «Lo que dicen quienes ya estudiaron con nosotras» usa la **API oficial de Google Places** (no se extraen de la
+página de Maps: sus condiciones de uso lo prohíben). Con la clave configurada muestra, de cada sede (Tabío, Cajicá, Bogotá):
+la calificación y el número de reseñas reales, y hasta 6 reseñas de 4–5 estrellas con texto, con el nombre de quien las escribió
+y el enlace a Google. Se consulta una vez al día. Sin clave, o si Google falla, se muestran las 3 reseñas reales de Google
+guardadas del sitio anterior.
+
+Para activarlas hay que crear la clave en Google Cloud (proyecto con facturación, habilitar **Places API (New)** y restringir la
+clave a esa API) y poner `GOOGLE_PLACES_API_KEY` (y, si se quiere, los `GOOGLE_PLACE_ID_*`) en el servidor.

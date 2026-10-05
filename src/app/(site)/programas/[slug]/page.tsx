@@ -9,6 +9,7 @@ import { getProgram, isPurchasable, programs } from "@/data/programs";
 import { getMagazine } from "@/lib/magazine";
 import { PAY_IN_FULL_PERCENT, formatCOP } from "@/lib/pricing";
 import { whatsappLink } from "@/lib/whatsapp";
+import { fetchGoogleReviews } from "@/server/google-reviews";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://fullnesscampinternacional.com";
 
@@ -89,9 +90,10 @@ export default async function ProgramPage(props: PageProps<"/programas/[slug]">)
   const jsonLd = <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(graph).replace(/</g, "\\u003c") }} />;
 
   if (landing) {
+    const googleReviews = await fetchGoogleReviews(); // null si no hay clave de Google: se usan las reseñas guardadas
     return (
       <main>
-        <ProgramLanding program={program} landing={landing} magazine={landing.magazine ? getMagazine(slug) : null} />
+        <ProgramLanding program={program} landing={landing} magazine={landing.magazine ? getMagazine(slug) : null} googleReviews={googleReviews} />
         {jsonLd}
       </main>
     );

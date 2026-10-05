@@ -241,3 +241,60 @@ test("el pedido guarda la campaña de origen", async () => {
   const o = await db.get<{ attribution: string }>("SELECT attribution FROM orders WHERE id = ?", [r.orderId]);
   assert.match(o?.attribution ?? "", /google/);
 });
+
+// ---------------------------------------------------------------- reseñas de Google (sin red: respuestas simuladas)
+
+import { combine, fetchGoogleReviews, parsePlace } from "./google-reviews.ts";
+
+const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+const placeBody = (name: string, rating: number, total: number, reviews: object[]) => ({
+  id: "x", displayName: { text: name }, rating, userRatingCount: total, googleMapsUri: "https://maps.google.com/?cid=1", reviews,
+});
+const rev = (author: string, rating: number, text: string, publishTime = "2026-09-01T10:00:00Z") => ({ authorAttribution: { displayName: author, uri: "https://maps.google.com/u/1" }, rating, text: { text }, publishTime });
+const TEXT = "Una experiencia muy bonita, aprendí muchísimo con las profesoras.";
+
+test("reseñas de Google: se conservan las de 4-5 estrellas con texto real y se descartan el resto", () => {
+  const { place, reviews } = parsePlace("Tabío", placeBody("Fullness Camp Tabío", 4.9, 120, [rev("Ana", 5, TEXT), rev("Beto", 2, TEXT), rev("Cami", 5, "Genial"), { rating: 5, text: { text: TEXT } }]));
+  assert.equal(place.rating, 4.9);
+  assert.equal(place.total, 120);
+  assert.deepEqual(reviews.map((r) => r.author), ["Ana"]);
+});
+
+test("reseñas de Google: promedio ponderado por sede y máximo 2 reseñas por sede", () => {
+  const a = parsePlace("Tabío", placeBody("FC Tabío", 5, 100, [rev("A1", 5, TEXT), rev("A2", 5, TEXT), rev("A3", 5, TEXT)]));
+  const b = parsePlace("Cajicá", placeBody("FC Cajicá", 4, 100, [rev("B1", 4, TEXT)]));
+  const data = combine([a, b]);
+  assert.ok(data);
+  assert.equal(data.rating, 4.5);
+  assert.equal(data.total, 200);
+  assert.equal(data.reviews.filter((r) => r.sede === "Tabío").length, 2);
+  assert.equal(data.reviews.length, 3);
+});
+
+test("reseñas de Google: sin clave de API no se llama a Google y devuelve null", async () => {
+  let llamadas = 0;
+  const r = await fetchGoogleReviews({ apiKey: "", fetcher: () => { llamadas++; return ok({}); } });
+  assert.equal(r, null);
+  assert.equal(llamadas, 0);
+});
+
+test("reseñas de Google: busca por nombre, rechaza lugares que no son de Fullness Camp y sobrevive a una sede caída", async () => {
+  const fetcher = (url: string, init?: RequestInit) => {
+    if (url.includes("searchText")) {
+      const q = JSON.parse(String(init?.body)).textQuery as string;
+      if (q.includes("Tabio")) return ok({ places: [{ id: "T1", displayName: { text: "Fullness Camp sede TABIO" } }] });
+      return ok({ places: [{ id: "OTRO", displayName: { text: "Peluquería Los Andes" } }] }); // no es de Fullness: se descarta
+    }
+    if (url.includes("/places/T1")) return ok(placeBody("Fullness Camp sede TABIO", 4.8, 40, [rev("Laura", 5, TEXT)]));
+    return Promise.resolve(new Response("error", { status: 500 }));
+  };
+  const r = await fetchGoogleReviews({ apiKey: "k", fetcher });
+  assert.ok(r);
+  assert.deepEqual(r.places.map((p) => p.sede), ["Tabío"]);
+  assert.equal(r.reviews[0].author, "Laura");
+});
+
+test("reseñas de Google: si todo falla devuelve null", async () => {
+  const r = await fetchGoogleReviews({ apiKey: "k", fetcher: () => Promise.resolve(new Response("x", { status: 403 })) });
+  assert.equal(r, null);
+});
