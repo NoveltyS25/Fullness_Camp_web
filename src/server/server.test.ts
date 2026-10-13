@@ -656,5 +656,17 @@ test("el pensum de Hatha trae Fundamentos del yoga (Lila, 8 clases) al inicio de
   assert.match(lessons[5].title, /Yoga Nidra/);
   await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Lila Govardhan", email: "academicofullnesscamp@fullnesscamp.com", role: "teacher" }, "http://localhost:3000");
   const lila = (await listClasses(db)).filter((c) => c.teacher_name === "Lila Govardhan").map((c) => c.title).sort();
-  assert.deepEqual(lila, ["Fundamentos del yoga", "Laboratorio de asanas"]);
+  assert.deepEqual(lila, ["Ayurveda: parte de Lila", "Fundamentos del yoga", "Laboratorio de asanas"]);
+});
+
+// ---------------------------------------------------------------- Ayurveda: parte de Lila (4 clases)
+
+test("el pensum de Hatha trae la parte de Ayurveda de Lila (4 clases) y conserva los talleres de cocina", async () => {
+  const { db } = await classesSetup();
+  const modules = await getPensum(db, HATHA);
+  const mod = modules.find((m) => m.classes.some((c) => c.title === "Ayurveda: parte de Lila"))!;
+  assert.deepEqual(mod.classes.map((c) => c.title), ["Ayurveda: parte de Lila", "Taller de cocina ayurveda creativa 1", "Taller de cocina ayurveda creativa 2"]);
+  const lessons = await getClassLessons(db, mod.classes[0].class_id);
+  assert.deepEqual(lessons.map((l) => l.title), ["Clase 1: Generalidades del Ayurveda", "Clase 2: Dinacharya y Ratricharya", "Clase 3: Doshas", "Clase 4: Alimentación"]);
+  assert.equal((await listClasses(db)).some((c) => c.title === "Doshas y gunas"), false);
 });

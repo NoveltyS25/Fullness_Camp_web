@@ -120,6 +120,20 @@ export const FUNDAMENTOS_DEL_YOGA: SeedClass = {
   ],
 };
 
+/**
+ * Ayurveda se dicta entre dos docentes: esta es la parte de Lila Govardhan (4 clases). La otra parte se agrega cuando se sepa quién la da.
+ */
+export const AYURVEDA_LILA: SeedClass = {
+  title: "Ayurveda: parte de Lila",
+  teacherEmail: "academicofullnesscamp@fullnesscamp.com",
+  lessons: [
+    { title: "Clase 1: Generalidades del Ayurveda", topics: [] },
+    { title: "Clase 2: Dinacharya y Ratricharya", topics: ["Dinacharya", "Ratricharya"] },
+    { title: "Clase 3: Doshas", topics: [] },
+    { title: "Clase 4: Alimentación", topics: [] },
+  ],
+};
+
 /** Laboratorio de asanas (Lila Govardhan): 8 clases. El temario de cada una llega después; Lila lo agrega si quiere. */
 export const LABORATORIO_ASANAS: SeedClass = {
   title: "Laboratorio de asanas",
@@ -189,8 +203,7 @@ export const PENSUM_SEED: Record<string, SeedModule[]> = {
     {
       title: "Ayurveda y yoga de la alimentación",
       topics: [
-        "Introducción a la medicina Ayurveda (medicina tradicional de la India)",
-        "Doshas y gunas",
+        AYURVEDA_LILA,
         "Taller de cocina ayurveda creativa 1",
         "Taller de cocina ayurveda creativa 2",
       ],
