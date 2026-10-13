@@ -45,7 +45,7 @@ export default async function Quejas() {
                   <dl className="mt-4 space-y-2 text-lg">
                     <div><dt className="inline font-medium">Recibida: </dt><dd className="inline">{fmt.format(new Date(c.created_at))}</dd></div>
                     <div><dt className="inline font-medium">Responder antes del: </dt><dd className="inline">{day.format(new Date(c.due_at))}</dd></div>
-                    <div><dt className="inline font-medium">Presenta: </dt><dd className="inline">{c.anonymous ? "Anónima (no dejó datos de contacto)" : `${c.full_name} · ${c.email}${c.phone ? ` · ${c.phone}` : ""}`}</dd></div>
+                    <div><dt className="inline font-medium">Presenta: </dt><dd className="inline">{c.full_name} · {c.email}{c.phone ? ` · ${c.phone}` : ""}</dd></div>
                     <div><dt className="inline font-medium">Sobre: </dt><dd className="inline">{c.accused}</dd></div>
                     {(c.event_date || c.event_place) && <div><dt className="inline font-medium">Cuándo y dónde: </dt><dd className="inline">{[c.event_date, c.event_place].filter(Boolean).join(" · ")}</dd></div>}
                     <div><dt className="font-medium">Descripción</dt><dd className="whitespace-pre-wrap rounded-xl bg-sand p-4">{c.description}</dd></div>

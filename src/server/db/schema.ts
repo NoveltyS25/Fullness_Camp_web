@@ -187,8 +187,7 @@ CREATE TABLE IF NOT EXISTS complaints (
   due_at TEXT NOT NULL,
   resolution TEXT,
   updated_at TEXT NOT NULL,
-  ip_hash TEXT NOT NULL,
-  anonymous INTEGER NOT NULL DEFAULT 0
+  ip_hash TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS complaints_status_idx ON complaints (status, created_at);
 CREATE INDEX IF NOT EXISTS complaints_ip_idx ON complaints (ip_hash, created_at);

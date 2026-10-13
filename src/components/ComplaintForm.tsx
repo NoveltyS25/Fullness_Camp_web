@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { createComplaintAction, type ComplaintState } from "@/app/(site)/quejas/actions";
 import { KINDS } from "@/lib/complaint-kinds";
 import { submitWith } from "@/lib/form";
@@ -9,7 +9,6 @@ const input = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-
 const area = "w-full rounded-xl border-2 border-clay-soft bg-white p-4 text-lg";
 
 export function ComplaintForm() {
-  const [anonymous, setAnonymous] = useState(false);
   const [state, action, pending] = useActionState<ComplaintState, FormData>(createComplaintAction, {});
 
   return (
@@ -29,26 +28,23 @@ export function ComplaintForm() {
         ))}
       </fieldset>
 
-      <label className="flex items-start gap-3 rounded-2xl bg-clay-soft p-5 text-lg">
-        <input type="checkbox" name="anonymous" checked={anonymous} onChange={(e) => setAnonymous(e.target.checked)} className="mt-1 h-6 w-6 shrink-0 accent-[#7a4a45]" />
-        <span>
-          <strong>Quiero que sea completamente anónimo.</strong> No guardaremos tu nombre, correo ni teléfono, y no podremos escribirte.
-          {anonymous && <span className="mt-2 block text-base">Guarda el número de radicado que verás al enviar. Según nuestra política de quejas, una denuncia anónima puede ser más difícil de evaluar porque no podemos pedirte más información.</span>}
-        </span>
-      </label>
+      <p className="rounded-2xl bg-clay-soft p-5 text-lg">
+        Te pedimos tus datos <strong>solo para poder hacer seguimiento</strong> y responderte. Son confidenciales y
+        <strong> no habrá ninguna represalia</strong> contra ti por presentar tu solicitud.
+      </p>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <label htmlFor="q-name" className="mb-2 block text-lg font-medium">Tu nombre completo <span className="font-normal text-muted">(confidencial)</span></label>
-          <input id="q-name" name="name" required={!anonymous} disabled={anonymous} autoComplete="name" className={input} />
+          <input id="q-name" name="name" required autoComplete="name" className={input} />
         </div>
         <div>
           <label htmlFor="q-email" className="mb-2 block text-lg font-medium">Tu correo electrónico <span className="font-normal text-muted">(confidencial)</span></label>
-          <input id="q-email" name="email" type="email" required={!anonymous} disabled={anonymous} autoComplete="email" className={input} />
+          <input id="q-email" name="email" type="email" required autoComplete="email" className={input} />
         </div>
         <div>
           <label htmlFor="q-phone" className="mb-2 block text-lg font-medium">Teléfono <span className="font-normal text-muted">(opcional · confidencial)</span></label>
-          <input id="q-phone" name="phone" disabled={anonymous} inputMode="tel" autoComplete="tel" className={input} />
+          <input id="q-phone" name="phone" inputMode="tel" autoComplete="tel" className={input} />
         </div>
         <div>
           <label htmlFor="q-accused" className="mb-2 block text-lg font-medium">Persona sobre quien presentas la queja</label>

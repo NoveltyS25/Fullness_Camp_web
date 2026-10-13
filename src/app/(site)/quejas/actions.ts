@@ -22,7 +22,6 @@ export async function createComplaintAction(_prev: ComplaintState, fd: FormData)
 
   const kind = text(fd, "kind", 20) as ComplaintKind;
   if (!(kind in KINDS)) return { error: "Elige el tipo de situación." };
-  const anonymous = fd.get("anonymous") === "on";
   const fullName = text(fd, "name", 120);
   const email = text(fd, "email", 160).toLowerCase();
   const rawPhone = text(fd, "phone", 30);
@@ -30,9 +29,9 @@ export async function createComplaintAction(_prev: ComplaintState, fd: FormData)
   const accused = text(fd, "accused", 200);
   const description = text(fd, "description", 4000);
 
-  if (!anonymous && fullName.length < 3) return { error: "Escribe tu nombre completo, o marca la casilla de anónimo. Tu información es confidencial." };
-  if (!anonymous && !EMAIL_RE.test(email)) return { error: "Escribe un correo válido para responderte, o marca la casilla de anónimo." };
-  if (!anonymous && rawPhone && !phone) return { error: "El teléfono no es válido. Ejemplo: 311 674 1900" };
+  if (fullName.length < 3) return { error: "Escribe tu nombre completo. Lo pedimos para poder hacer seguimiento; tu información es confidencial." };
+  if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido para responderte." };
+  if (rawPhone && !phone) return { error: "El teléfono no es válido. Ejemplo: 311 674 1900" };
   if (accused.length < 2) return { error: "Escribe el nombre de la persona sobre quien presentas la queja." };
   if (!text(fd, "event_date", 40)) return { error: "Indica cuándo ocurrió (una fecha aproximada sirve)." };
   if (!text(fd, "event_place", 200)) return { error: "Indica dónde ocurrió (sede, en línea, etc.)." };
@@ -41,7 +40,7 @@ export async function createComplaintAction(_prev: ComplaintState, fd: FormData)
 
   const db = getDb();
   const result = await createComplaint(db, {
-    kind, anonymous, fullName, email, phone, accused, description,
+    kind, fullName, email, phone, accused, description,
     eventDate: text(fd, "event_date", 40) || null,
     eventPlace: text(fd, "event_place", 200) || null,
     witnesses: text(fd, "witnesses", 1500) || null,
@@ -49,10 +48,10 @@ export async function createComplaintAction(_prev: ComplaintState, fd: FormData)
   });
   if (!result.ok) return { error: "Recibimos varias solicitudes desde tu conexión. Inténtalo de nuevo en una hora o escríbenos por WhatsApp." };
 
-  if (!anonymous) await sendEmail(db, { to: email, ...complaintReceivedEmail({ fullName, code: result.code, days: REVIEW_BUSINESS_DAYS }) });
+  await sendEmail(db, { to: email, ...complaintReceivedEmail({ fullName, code: result.code, days: REVIEW_BUSINESS_DAYS }) });
   const staff = process.env.COMPLAINTS_EMAIL?.trim();
   if (staff) {
     await sendEmail(db, { to: staff, ...complaintStaffEmail({ code: result.code, kindLabel: KINDS[kind], panelUrl: `${await baseUrl()}/campus/admin/quejas` }) });
   }
-  redirect(`/quejas/recibida?radicado=${encodeURIComponent(result.code)}${anonymous ? "&anonima=1" : ""}`);
+  redirect(`/quejas/recibida?radicado=${encodeURIComponent(result.code)}`);
 }
