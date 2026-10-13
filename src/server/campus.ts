@@ -4,7 +4,8 @@ import { sendEmail, sendWhatsapp } from "./outbox.ts";
 import { createSetupLink } from "./auth.ts";
 import { generateTempPassword, hashPassword } from "./security.ts";
 import { manualAccountEmail } from "./templates.ts";
-import { findUserByCedula, type Role, type User } from "./users.ts";
+import { findUserByCedula, PENDING_PREFIX, type Role, type User } from "./users.ts";
+import { randomInt } from "node:crypto";
 
 // ------------------------------------------------------------------ lo que ve la estudiante
 
@@ -432,20 +433,25 @@ export async function setRoleByCedula(db: Db, actor: Pick<User, "id" | "role">, 
 export async function createStaffAccount(
   db: Db,
   actor: Pick<User, "role">,
-  s: { cedula: string; fullName: string; email: string; role: "teacher" | "admin" },
+  s: { cedula: string | null; fullName: string; email: string; role: "teacher" | "admin" },
   baseUrl: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (actor.role !== "admin") return { ok: false, error: "Solo una administradora puede crear cuentas." };
-  if (await findUserByCedula(db, s.cedula)) return { ok: false, error: "Ya existe una cuenta con esa cédula. Cambia su rol en la lista." };
+  // Sin cédula (docentes nuevas): código provisional; ella escribe la real en su primer ingreso.
+  const cedula = s.cedula ?? `${PENDING_PREFIX}${randomInt(10_000_000, 99_999_999)}`;
+  if (s.cedula && (await findUserByCedula(db, s.cedula))) return { ok: false, error: "Ya existe una cuenta con esa cédula. Cambia su rol en la lista." };
+  if (!s.cedula && (await db.get("SELECT 1 AS ok FROM users WHERE email = ? AND cedula LIKE ?", [s.email.toLowerCase(), `${PENDING_PREFIX}%`]))) {
+    return { ok: false, error: "Ya hay una invitación pendiente para ese correo." };
+  }
   const hash = await hashPassword(generateTempPassword(24));
   const userId = newId();
   await db.run(
     `INSERT INTO users (id, cedula, full_name, email, role, password_hash, must_change_password, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
-    [userId, s.cedula, s.fullName, s.email.toLowerCase(), s.role, hash, nowIso()],
+    [userId, cedula, s.fullName, s.email.toLowerCase(), s.role, hash, nowIso()],
   );
   await sendEmail(db, {
     to: s.email.toLowerCase(),
-    ...manualAccountEmail({ fullName: s.fullName, cedula: s.cedula, setPasswordUrl: await createSetupLink(db, userId, baseUrl), programTitle: null, loginUrl: `${baseUrl}/campus/ingresar`, recoverUrl: `${baseUrl}/campus/recuperar` }),
+    ...manualAccountEmail({ fullName: s.fullName, cedula: s.cedula ?? "", setPasswordUrl: await createSetupLink(db, userId, baseUrl), programTitle: null, loginUrl: `${baseUrl}/campus/ingresar`, recoverUrl: `${baseUrl}/campus/recuperar` }),
   });
   return { ok: true };
 }

@@ -390,3 +390,32 @@ test("el certificado solo lo ve su dueña o la administración, y solo si el cur
   assert.equal(await getCertificate(db, t1, eid), undefined);
   assert.ok(await getCertificate(db, admin, eid));
 });
+
+// ---------------------------------------------------------------- docentes sin cédula y certificaciones
+
+import { createStaffAccount } from "./campus.ts";
+import { getProgramTeachers, getTeacherPrograms, setTeacherPrograms } from "./curriculum.ts";
+import { isPendingCedula } from "./users.ts";
+
+test("una docente se crea sin cédula con un código provisional que no sirve para ingresar", async () => {
+  const db = await setup();
+  const r = await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Docente Nueva", email: "Nueva@X.co", role: "teacher" }, "http://localhost:3000");
+  assert.equal(r.ok, true);
+  const row = await db.get<{ cedula: string }>("SELECT cedula FROM users WHERE email = ?", ["nueva@x.co"]);
+  assert.ok(isPendingCedula(row!.cedula));
+  // misma invitación dos veces: no se duplica
+  assert.equal((await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Docente Nueva", email: "nueva@x.co", role: "teacher" }, "http://localhost:3000")).ok, false);
+  // una estudiante no puede crear cuentas
+  assert.equal((await createStaffAccount(db, { role: "student" }, { cedula: null, fullName: "X", email: "x@x.co", role: "teacher" }, "http://localhost:3000")).ok, false);
+});
+
+test("las certificaciones de una docente se guardan, ignoran las inválidas y la listan en el plan", async () => {
+  const { db, t1 } = await pensumSetup();
+  await setTeacherPrograms(db, t1.id, [HATHA, "no-existe", "retiro-de-abundancia"]);
+  assert.deepEqual(await getTeacherPrograms(db, t1.id), [HATHA]);
+  const teachers = await getProgramTeachers(db, HATHA);
+  assert.equal(teachers.length, 1);
+  assert.equal(teachers[0].full_name, "Docente Uno");
+  await setTeacherPrograms(db, t1.id, []);
+  assert.equal((await getProgramTeachers(db, HATHA)).length, 0);
+});

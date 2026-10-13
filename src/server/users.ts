@@ -15,6 +15,13 @@ export interface User {
   notify_whatsapp: number;
 }
 
+/**
+ * Las docentes se crean sin cédula: llevan un código provisional "PEND-…" hasta que la escriben en su primer ingreso.
+ * Ese código nunca se le muestra a nadie ni sirve para ingresar.
+ */
+export const PENDING_PREFIX = "PEND-";
+export const isPendingCedula = (cedula: string): boolean => cedula.startsWith(PENDING_PREFIX);
+
 export const USER_COLUMNS =
   "id, cedula, full_name, email, whatsapp_phone, role, must_change_password, notify_email, notify_whatsapp";
 

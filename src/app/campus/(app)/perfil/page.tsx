@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ProfileForm } from "@/components/campus/ProfileForm";
 import { TeacherProfileForm } from "@/components/campus/TeacherProfileForm";
-import { getTeacherProfile } from "@/server/curriculum";
+import { programs } from "@/data/programs";
+import { getTeacherPrograms, getTeacherProfile } from "@/server/curriculum";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
 
@@ -13,6 +14,9 @@ export default async function Perfil() {
   if (!user) redirect("/campus/ingresar");
 
   const teacherProfile = user.role === "student" ? undefined : await getTeacherProfile(getDb(), user.id);
+
+  const certOptions = programs.filter((p) => p.category === "certificacion").map((p) => ({ slug: p.slug, title: p.title }));
+  const selectedPrograms = user.role === "student" ? [] : await getTeacherPrograms(getDb(), user.id);
 
   return (
     <div className="max-w-xl">
@@ -29,7 +33,7 @@ export default async function Perfil() {
         <section aria-labelledby="docente" className="mt-12 border-t border-clay-soft pt-8">
           <h2 id="docente" className="mb-2 text-2xl font-bold">Mi perfil de docente</h2>
           <p className="mb-6 text-lg text-muted">Esto lo ven tus estudiantes en el plan de estudios de las certificaciones donde dictas.</p>
-          <TeacherProfileForm profile={teacherProfile} />
+          <TeacherProfileForm profile={teacherProfile} options={certOptions} selected={selectedPrograms} />
         </section>
       )}
       <p className="mt-10 border-t border-clay-soft pt-6 text-lg">

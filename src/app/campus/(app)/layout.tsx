@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { unreadCount } from "@/server/campus";
+import { cookies } from "next/headers";
+import { getEntitlements, unreadCount } from "@/server/campus";
+import { isPendingCedula } from "@/server/users";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
-import { logoutAction } from "../actions";
+import { logoutAction, switchViewAction } from "../actions";
 
 export const metadata: Metadata = {
   title: { default: "Campus virtual", template: "%s | Campus Fullness Camp" },
@@ -19,8 +21,16 @@ export default async function CampusLayout({ children }: LayoutProps<"/campus">)
   if (!user) redirect("/campus/ingresar");
   if (user.must_change_password) redirect("/campus/cambiar-clave");
 
-  const unread = await unreadCount(getDb(), user.id);
-  const isStaff = user.role === "teacher" || user.role === "admin";
+  // Docente que aún no completó su registro: primero sus datos.
+  if (user.role !== "student" && isPendingCedula(user.cedula)) redirect("/campus/bienvenida-docente");
+
+  const db = getDb();
+  const unread = await unreadCount(db, user.id);
+  const hasStaffRole = user.role === "teacher" || user.role === "admin";
+  // Una docente con inscripción propia puede ver el campus como estudiante, con la misma cédula.
+  const studentView = hasStaffRole && (await cookies()).get("fc_view")?.value === "student";
+  const isStaff = hasStaffRole && !studentView;
+  const canSwitchToStudent = isStaff && (await getEntitlements(db, user.id)).length > 0;
 
   return (
     <>
@@ -40,6 +50,14 @@ export default async function CampusLayout({ children }: LayoutProps<"/campus">)
               {unread > 0 && <span className="ml-2 grid h-7 min-w-7 place-items-center rounded-full bg-clay-dark px-1.5 text-sm text-white">{unread}</span>}
             </Link>
             <Link href="/campus/perfil" className={pill}>Mi perfil</Link>
+            {(canSwitchToStudent || studentView) && (
+              <form action={switchViewAction}>
+                <input type="hidden" name="view" value={studentView ? "staff" : "student"} />
+                <button type="submit" className="inline-flex min-h-12 items-center rounded-full border-2 border-clay-dark px-4 font-medium text-clay-dark hover:bg-clay-soft">
+                  {studentView ? "Volver a mi panel de docente" : "Ir a mi panel de estudiante"}
+                </button>
+              </form>
+            )}
             <form action={logoutAction}><button type="submit" className={`${pill} underline`}>Salir</button></form>
           </nav>
         </div>

@@ -99,7 +99,7 @@ export default async function Admin() {
 
         <div>
           <h3 className="mb-3 text-xl font-bold">Crear la cuenta de una profesora</h3>
-          <p className="mb-4 text-muted">Le llegará por correo su acceso con una contraseña temporal.</p>
+          <p className="mb-4 text-muted">Le llegará por correo el enlace para crear su contraseña. En su primer ingreso completa sus datos y elige sus certificaciones.</p>
           <ActionForm action={createStaffAction} submitLabel="Crear cuenta">
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
@@ -107,8 +107,8 @@ export default async function Admin() {
                 <input id="s_full_name" name="full_name" required className={inputClass} />
               </div>
               <div>
-                <label htmlFor="s_cedula" className="mb-2 block text-lg font-medium">Cédula</label>
-                <input id="s_cedula" name="cedula" inputMode="numeric" required className={inputClass} />
+                <label htmlFor="s_cedula" className="mb-2 block text-lg font-medium">Cédula <span className="font-normal text-muted">(vacía para docentes: la escriben al entrar)</span></label>
+                <input id="s_cedula" name="cedula" inputMode="numeric" className={inputClass} />
               </div>
             </div>
             <div className="grid gap-5 sm:grid-cols-2">

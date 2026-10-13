@@ -3,11 +3,12 @@
 import { useActionState } from "react";
 import { saveTeacherProfileAction, type FormState } from "@/app/campus/actions";
 import { submitWith } from "@/lib/form";
+import { CertificationPicker } from "@/components/campus/CertificationPicker";
 import type { TeacherProfile } from "@/server/curriculum";
 
 const input = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-4 text-lg";
 
-export function TeacherProfileForm({ profile }: { profile?: TeacherProfile }) {
+export function TeacherProfileForm({ profile, options, selected }: { profile?: TeacherProfile; options: { slug: string; title: string }[]; selected: string[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(saveTeacherProfileAction, {});
 
   return (
@@ -34,6 +35,7 @@ export function TeacherProfileForm({ profile }: { profile?: TeacherProfile }) {
         <label htmlFor="tp-photo" className="mb-2 block text-lg font-medium">Enlace de tu foto <span className="font-normal text-muted">(subir archivos llegará pronto)</span></label>
         <input id="tp-photo" name="photo_url" type="url" defaultValue={profile?.photo_url ?? ""} placeholder="https://…" className={input} />
       </div>
+      <CertificationPicker options={options} selected={selected} />
       <button type="submit" disabled={pending} className="btn btn-primary">{pending ? "Guardando…" : "Guardar mi perfil de docente"}</button>
       <p role="status" aria-live="polite" className="text-lg">
         {state.error && <span className="text-red-800">{state.error}</span>}

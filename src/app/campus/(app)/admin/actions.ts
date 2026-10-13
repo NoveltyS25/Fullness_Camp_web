@@ -120,11 +120,13 @@ export async function setRoleAction(_prev: FormState, fd: FormData): Promise<For
 
 export async function createStaffAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const admin = await requireAdmin();
-  const cedula = normalizeCedula(text(fd, "cedula"));
+  const rawCedula = text(fd, "cedula");
+  const cedula = rawCedula ? normalizeCedula(rawCedula) : null;
   const email = text(fd, "email").toLowerCase();
   const fullName = text(fd, "full_name").slice(0, 120);
   const role = text(fd, "role") === "admin" ? "admin" : "teacher";
-  if (!cedula) return { error: "Escribe una cédula válida (solo números)." };
+  if (rawCedula && !cedula) return { error: "La cédula no es válida (solo números). También puedes dejarla vacía: la docente la escribe en su primer ingreso." };
+  if (!cedula && role === "admin") return { error: "Una administradora necesita su cédula." };
   if (!fullName) return { error: "Escribe el nombre." };
   if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido." };
 

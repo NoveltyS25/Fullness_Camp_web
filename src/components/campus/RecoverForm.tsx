@@ -12,7 +12,8 @@ export function RecoverForm() {
     <form onSubmit={submitWith(action)} className="space-y-5">
       <div>
         <label htmlFor="cedula" className="mb-2 block text-lg font-medium">Cédula</label>
-        <input id="cedula" name="cedula" inputMode="numeric" required className={input} />
+        <input id="cedula" name="cedula" inputMode="numeric" className={input} />
+        <p className="mt-2 text-base text-muted">Si eres docente y aún no completaste tu registro, déjala vacía.</p>
       </div>
       <div>
         <label htmlFor="email" className="mb-2 block text-lg font-medium">Correo con el que te inscribiste</label>

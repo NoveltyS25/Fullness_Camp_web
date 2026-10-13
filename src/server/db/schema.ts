@@ -199,6 +199,13 @@ CREATE TABLE IF NOT EXISTS topic_teachers (
   PRIMARY KEY (topic_id, user_id)
 );
 
+-- Certificaciones en las que cada docente dicta (las elige en su primer ingreso y puede cambiarlas).
+CREATE TABLE IF NOT EXISTS teacher_programs (
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  program_slug TEXT NOT NULL,
+  PRIMARY KEY (user_id, program_slug)
+);
+
 -- Para no volver a sembrar el pensum inicial de un programa si la administración lo borra a propósito.
 CREATE TABLE IF NOT EXISTS curriculum_seeded (
   program_slug TEXT PRIMARY KEY

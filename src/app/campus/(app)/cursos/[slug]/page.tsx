@@ -92,7 +92,7 @@ export default async function PlanDeEstudios(props: PageProps<"/campus/cursos/[s
                   </div>
                 </div>
                 {t.bio && <p className="mt-3">{t.bio}</p>}
-                <p className="mt-3 text-sm text-muted">Dicta: {t.topics.join(" · ")}</p>
+                {t.topics.length > 0 && <p className="mt-3 text-sm text-muted">Dicta: {t.topics.join(" · ")}</p>}
                 {(t.contact_email || t.contact_phone) ? (
                   <p className="mt-3 text-lg">
                     {t.contact_email && <a href={`mailto:${t.contact_email}`} className="block break-all font-medium text-clay-dark underline">{t.contact_email}</a>}

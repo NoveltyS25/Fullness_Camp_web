@@ -73,3 +73,11 @@ puede llamar a `GET /api/notificaciones/procesar` con `Authorization: Bearer <CR
 - **Estudiantes**: `/campus/cursos` (cursos activos y terminados) y `/campus/cursos/[slug]` (plan de estudios con docentes y su contacto). Solo con inscripción activa.
 - **Curso terminado y certificado**: la administración lo marca en la página de la cohorte (*Marcar curso terminado*). Genera el código `FC-XXXXXXXX` y el certificado imprimible en `/campus/certificado/[id]`. Las terminadas dejan de recibir avisos de horario.
 - **Tesina** (obligatoria, se presenta a Lila) y **retiros** (fuera del valor del programa; precio especial a estudiantes activas) se muestran como avisos en el plan, no como temas.
+
+## Docentes: ingreso, primer registro y doble panel
+
+- Todas las personas ingresan con **cédula + contraseña**. Una docente nueva se crea solo con nombre y correo (admin → *Crear la cuenta de una profesora*, o `node scripts/create-staff.ts --role teacher --name "…" --email …`). Hasta que escribe su cédula lleva un código provisional `PEND-…` que no sirve para ingresar.
+- Recibe el enlace para crear su contraseña y entra directo a **/campus/bienvenida-docente**: nombre, cédula (con la que ingresará desde entonces), correo y celular de contacto para estudiantes y las certificaciones en las que es docente. Si ya hay una cuenta con esa cédula (por ejemplo, de estudiante), la administración une las cuentas.
+- Si el enlace vence, «Olvidé mi contraseña» acepta el correo con la cédula vacía mientras el registro está pendiente.
+- Una docente con inscripción propia ve el botón **Ir a mi panel de estudiante** (y **Volver a mi panel de docente**). Es la misma cuenta y cédula; la vista se recuerda en una cookie.
+- `node scripts/create-staff.ts --role admin --cedula … --name … --email …` también sube de rol una cuenta que ya existe (por ejemplo, una compra de prueba) y conserva sus inscripciones.

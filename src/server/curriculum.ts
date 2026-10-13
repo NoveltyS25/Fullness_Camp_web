@@ -1,10 +1,13 @@
 import { randomInt } from "node:crypto";
 import { PENSUM_SEED } from "../data/pensum-seed.ts";
+import { programs } from "../data/programs.ts";
 import { newId, nowIso, type Db } from "./db/index.ts";
 import type { User } from "./users.ts";
 
 export type Modality = "presencial" | "virtual" | "mixta";
 export const MODALITIES: Record<Modality, string> = { presencial: "Presencial", virtual: "Virtual", mixta: "Presencial y virtual" };
+
+const CERT_SLUGS = new Set(programs.filter((p) => p.category === "certificacion").map((p) => p.slug));
 
 type Actor = Pick<User, "id" | "role">;
 export type Result = { ok: true } | { ok: false; error: string };
@@ -106,11 +109,34 @@ export async function getProgramTeachers(db: Db, programSlug: string): Promise<T
     c.topics.push(r.topic_title);
     cards.set(r.user_id, c);
   }
+  const chosen = await db.all<{ user_id: string; full_name: string }>(
+    "SELECT tp.user_id, u.full_name FROM teacher_programs tp JOIN users u ON u.id = tp.user_id WHERE tp.program_slug = ? ORDER BY u.full_name",
+    [programSlug],
+  );
+  for (const r of chosen) {
+    if (!cards.has(r.user_id)) cards.set(r.user_id, { user_id: r.user_id, full_name: r.full_name, headline: null, bio: null, contact_email: null, contact_phone: null, photo_url: null, topics: [] });
+  }
   for (const c of cards.values()) {
     const p = await db.get<Omit<TeacherCard, "user_id" | "full_name" | "topics">>("SELECT headline, bio, contact_email, contact_phone, photo_url FROM teacher_profiles WHERE user_id = ?", [c.user_id]);
     if (p) Object.assign(c, p);
   }
   return [...cards.values()];
+}
+
+// ------------------------------------------------------------------ certificaciones de cada docente
+
+export async function getTeacherPrograms(db: Db, userId: string): Promise<string[]> {
+  const rows = await db.all<{ program_slug: string }>("SELECT program_slug FROM teacher_programs WHERE user_id = ? ORDER BY program_slug", [userId]);
+  return rows.map((r) => r.program_slug);
+}
+
+/** Reemplaza la lista de certificaciones de la docente (solo se aceptan certificaciones que existen). */
+export async function setTeacherPrograms(db: Db, userId: string, slugs: string[]): Promise<void> {
+  const valid = [...new Set(slugs)].filter((s) => CERT_SLUGS.has(s));
+  await db.transaction(async (tx) => {
+    await tx.run("DELETE FROM teacher_programs WHERE user_id = ?", [userId]);
+    for (const s of valid) await tx.run("INSERT INTO teacher_programs (user_id, program_slug) VALUES (?, ?)", [userId, s]);
+  });
 }
 
 export function listTeachers(db: Db): Promise<{ id: string; full_name: string }[]> {
