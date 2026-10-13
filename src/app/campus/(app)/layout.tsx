@@ -32,6 +32,7 @@ export default async function CampusLayout({ children }: LayoutProps<"/campus">)
           </Link>
           <nav aria-label="Campus" className="flex flex-wrap items-center gap-1">
             <Link href="/campus" className={pill}>Mi horario</Link>
+            {!isStaff && <Link href="/campus/cursos" className={pill}>Mis cursos</Link>}
             {isStaff && <Link href="/campus/profesor" className={pill}>Mis clases</Link>}
             {user.role === "admin" && <Link href="/campus/admin" className={pill}>Administración</Link>}
             <Link href="/campus/avisos" className={pill}>

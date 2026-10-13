@@ -7,6 +7,7 @@ import { normalizeWhatsapp } from "@/lib/campus/phone";
 import { fromLocalInput } from "@/lib/campus/time";
 import { consumePasswordReset, createPasswordReset, login, peekPasswordReset } from "@/server/auth";
 import { markAllRead, processPendingDeliveries, rescheduleSession, updateProfile } from "@/server/campus";
+import { saveTeacherProfile } from "@/server/curriculum";
 import { getDb } from "@/server/db";
 import { sendEmail } from "@/server/outbox";
 import { hashToken, normalizeCedula, validateNewPassword, verifyPassword } from "@/server/security";
@@ -113,6 +114,33 @@ export async function updateProfileAction(_prev: FormState, fd: FormData): Promi
   await updateProfile(getDb(), user.id, { fullName, phone, notifyEmail, notifyWhatsapp });
   revalidatePath("/campus", "layout");
   return { message: "Datos guardados." };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Perfil que las estudiantes ven en el plan de estudios. Solo docentes y administradoras. */
+export async function saveTeacherProfileAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/campus/ingresar");
+  if (user.role === "student") redirect("/campus");
+
+  const email = text(fd, "contact_email").trim().toLowerCase();
+  const rawPhone = text(fd, "contact_phone").trim();
+  const phone = rawPhone ? normalizeWhatsapp(rawPhone) : null;
+  const photo = text(fd, "photo_url").trim();
+  if (email && !EMAIL_RE.test(email)) return { error: "El correo de contacto no es válido." };
+  if (rawPhone && !phone) return { error: "El número de contacto no es válido. Ejemplo: 311 674 1900" };
+  if (photo && !photo.startsWith("https://")) return { error: "El enlace de la foto debe empezar por https://" };
+
+  await saveTeacherProfile(getDb(), user.id, {
+    headline: text(fd, "headline").trim().slice(0, 140) || null,
+    bio: text(fd, "bio").trim().slice(0, 1200) || null,
+    contact_email: email || null,
+    contact_phone: phone,
+    photo_url: photo.slice(0, 500) || null,
+  });
+  revalidatePath("/campus", "layout");
+  return { message: "Tu perfil de docente quedó guardado." };
 }
 
 export async function markAllReadAction() {

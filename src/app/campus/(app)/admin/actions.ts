@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getProgram } from "@/data/programs";
 import { fromLocalInput } from "@/lib/campus/time";
 import { addSessions, createCohort, createStaffAccount, enrollManual, setCohortActive, setEnrollmentStatus, setRoleByCedula } from "@/server/campus";
+import { setCourseCompleted } from "@/server/curriculum";
 import { getDb } from "@/server/db";
 import { normalizeCedula } from "@/server/security";
 import type { Role } from "@/server/users";
@@ -86,6 +87,13 @@ export async function setEnrollmentStatusAction(fd: FormData) {
   if (status !== "active" && status !== "paused" && status !== "cancelled") return;
   const cohortId = text(fd, "cohort_id");
   await setEnrollmentStatus(getDb(), cohortId, text(fd, "user_id"), status);
+  revalidatePath(`/campus/admin/cohortes/${cohortId}`);
+}
+
+export async function setCourseCompletedAction(fd: FormData) {
+  const admin = await requireAdmin();
+  const cohortId = text(fd, "cohort_id");
+  await setCourseCompleted(getDb(), admin, text(fd, "enrollment_id"), text(fd, "completed") === "true");
   revalidatePath(`/campus/admin/cohortes/${cohortId}`);
 }
 

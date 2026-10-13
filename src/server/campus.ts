@@ -16,13 +16,15 @@ export interface Entitlement {
   cohort_name: string | null;
   sede: string | null;
   teacher_name: string | null;
+  completed_at: string | null;
+  certificate_code: string | null;
 }
 
 /** Programas a los que la persona tiene acceso AHORA (inscripción activa, creada por un pago o por una administradora). */
 export function getEntitlements(db: Db, userId: string): Promise<Entitlement[]> {
   return db.all<Entitlement>(
     `SELECT e.id AS enrollment_id, e.program_slug, e.status, e.cohort_id,
-            c.name AS cohort_name, c.sede, t.full_name AS teacher_name
+            c.name AS cohort_name, c.sede, t.full_name AS teacher_name, e.completed_at, e.certificate_code
      FROM enrollments e
      LEFT JOIN cohorts c ON c.id = e.cohort_id
      LEFT JOIN users t ON t.id = c.teacher_id
@@ -59,7 +61,7 @@ const SESSION_SELECT = `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location
 export function getStudentSessions(db: Db, userId: string): Promise<SessionRow[]> {
   return db.all<SessionRow>(
     `${SESSION_SELECT}
-     WHERE s.ends_at >= ? AND s.cohort_id IN (SELECT cohort_id FROM enrollments WHERE user_id = ? AND status = 'active' AND cohort_id IS NOT NULL)
+     WHERE s.ends_at >= ? AND s.cohort_id IN (SELECT cohort_id FROM enrollments WHERE user_id = ? AND status = 'active' AND completed_at IS NULL AND cohort_id IS NOT NULL)
      ORDER BY s.starts_at LIMIT 80`,
     [nowIso(), userId],
   );
@@ -125,7 +127,7 @@ export async function getSessionForActor(db: Db, actor: Pick<User, "id" | "role"
 }
 
 export async function countActiveEnrollees(db: Db, cohortId: string): Promise<number> {
-  const r = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM enrollments WHERE cohort_id = ? AND status = 'active'", [cohortId]);
+  const r = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM enrollments WHERE cohort_id = ? AND status = 'active' AND completed_at IS NULL", [cohortId]);
   return Number(r?.n ?? 0);
 }
 
@@ -179,7 +181,7 @@ export async function rescheduleSession(db: Db, actor: Pick<User, "id" | "role">
     const { title, body } = describeChange(s.title, newData, reason);
     const students = await tx.all<{ id: string; email: string; whatsapp_phone: string | null; notify_email: number; notify_whatsapp: number }>(
       `SELECT u.id, u.email, u.whatsapp_phone, u.notify_email, u.notify_whatsapp
-       FROM enrollments e JOIN users u ON u.id = e.user_id WHERE e.cohort_id = ? AND e.status = 'active'`,
+       FROM enrollments e JOIN users u ON u.id = e.user_id WHERE e.cohort_id = ? AND e.status = 'active' AND e.completed_at IS NULL`,
       [s.cohort_id],
     );
     for (const st of students) {
@@ -340,8 +342,8 @@ export function listCohortSessions(db: Db, cohortId: string): Promise<SessionRow
 }
 
 export function listCohortEnrollments(db: Db, cohortId: string) {
-  return db.all<{ user_id: string; status: "active" | "paused" | "cancelled"; full_name: string; cedula: string; email: string; whatsapp_phone: string | null }>(
-    `SELECT e.user_id, e.status, u.full_name, u.cedula, u.email, u.whatsapp_phone
+  return db.all<{ enrollment_id: string; completed_at: string | null; user_id: string; status: "active" | "paused" | "cancelled"; full_name: string; cedula: string; email: string; whatsapp_phone: string | null }>(
+    `SELECT e.id AS enrollment_id, e.completed_at, e.user_id, e.status, u.full_name, u.cedula, u.email, u.whatsapp_phone
      FROM enrollments e JOIN users u ON u.id = e.user_id WHERE e.cohort_id = ? ORDER BY u.full_name`,
     [cohortId],
   );

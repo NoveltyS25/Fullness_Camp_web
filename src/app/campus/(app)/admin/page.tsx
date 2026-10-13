@@ -25,6 +25,7 @@ export default async function Admin() {
         <h1 className="text-3xl font-bold sm:text-4xl">Administración</h1>
         <div className="flex flex-wrap gap-3">
           <Link href="/campus/admin/interesadas" className="btn btn-secondary">Personas interesadas</Link>
+          <Link href="/campus/profesor/temas" className="btn btn-secondary">Temas y docentes por certificación</Link>
           <Link href="/campus/admin/quejas" className="btn btn-secondary">Quejas y denuncias{openComplaints > 0 ? ` (${openComplaints})` : ""}</Link>
         </div>
       </div>

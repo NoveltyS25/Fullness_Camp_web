@@ -34,6 +34,9 @@ class SqliteDb implements Db {
     if (path !== ":memory:") this.raw.exec("PRAGMA journal_mode = WAL");
     this.raw.exec(SCHEMA);
     this.addColumnIfMissing("orders", "attribution", "TEXT");
+    // Curso terminado: la administración lo marca cuando la estudiante cumple todo (incluida la tesina presentada a Lila).
+    this.addColumnIfMissing("enrollments", "completed_at", "TEXT");
+    this.addColumnIfMissing("enrollments", "certificate_code", "TEXT");
     // Dentro de una transacción, "transaction" anidada solo ejecuta la función.
     this.txView = {
       all: (s, p) => this.all(s, p),

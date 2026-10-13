@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SessionCard, } from "@/components/campus/SessionCard";
 import { dayKey, formatDay } from "@/lib/campus/time";
@@ -21,7 +22,13 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
   return (
     <>
       <h1 className="mb-2 text-3xl font-bold sm:text-4xl">Mis clases</h1>
-      <p className="mb-8 text-lg text-muted">Si necesitas mover o cancelar una clase, tus estudiantes recibirán el aviso automáticamente.</p>
+      <p className="mb-6 text-lg text-muted">Si necesitas mover o cancelar una clase, tus estudiantes recibirán el aviso automáticamente.</p>
+
+      <section aria-labelledby="temas" className="mb-10 rounded-3xl bg-clay-soft p-6">
+        <h2 id="temas" className="mb-2 text-2xl font-bold">Mis temas por certificación</h2>
+        <p className="mb-4 text-lg">Mira los módulos de cada certificación, agrega o quita temas, asígnate los que dictas y define horario y si es presencial o virtual.</p>
+        <Link href="/campus/profesor/temas" className="btn btn-primary">Ver certificaciones y temas</Link>
+      </section>
 
       {notified !== null && !Number.isNaN(notified) && (
         <p role="status" className="mb-8 rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">

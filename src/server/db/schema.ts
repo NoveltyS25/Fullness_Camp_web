@@ -168,6 +168,53 @@ CREATE TABLE IF NOT EXISTS leads (
 CREATE INDEX IF NOT EXISTS leads_created_idx ON leads (created_at);
 CREATE INDEX IF NOT EXISTS leads_ip_idx ON leads (ip_hash, created_at);
 
+-- Pensum (plan de estudios) de cada certificación: módulos → temas. Los temas los pueden agregar o quitar las docentes y la administración.
+CREATE TABLE IF NOT EXISTS curriculum_modules (
+  id TEXT PRIMARY KEY,
+  program_slug TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS curriculum_modules_idx ON curriculum_modules (program_slug, position);
+
+CREATE TABLE IF NOT EXISTS curriculum_topics (
+  id TEXT PRIMARY KEY,
+  module_id TEXT NOT NULL REFERENCES curriculum_modules (id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  created_by TEXT REFERENCES users (id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS curriculum_topics_idx ON curriculum_topics (module_id, position);
+
+-- Qué docente dicta cada tema, cuántas clases, en qué horario (texto libre) y si es presencial o virtual.
+CREATE TABLE IF NOT EXISTS topic_teachers (
+  topic_id TEXT NOT NULL REFERENCES curriculum_topics (id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  modality TEXT NOT NULL CHECK (modality IN ('presencial', 'virtual', 'mixta')),
+  classes_count INTEGER,
+  schedule_note TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (topic_id, user_id)
+);
+
+-- Para no volver a sembrar el pensum inicial de un programa si la administración lo borra a propósito.
+CREATE TABLE IF NOT EXISTS curriculum_seeded (
+  program_slug TEXT PRIMARY KEY
+);
+
+-- Perfil público de cada docente (se muestra a las estudiantes en el pensum). Lo llena la docente en su primer ingreso.
+CREATE TABLE IF NOT EXISTS teacher_profiles (
+  user_id TEXT PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  headline TEXT,
+  bio TEXT,
+  contact_email TEXT,
+  contact_phone TEXT,
+  photo_url TEXT,
+  updated_at TEXT NOT NULL
+);
+
 -- Quejas y denuncias (política de quejas, anti-acoso y anti-represalias). Información confidencial: solo la ve la administración.
 -- due_at = fecha límite (30 días hábiles) para aceptar o desestimar la queja, según la política. De la IP solo se guarda un hash.
 CREATE TABLE IF NOT EXISTS complaints (

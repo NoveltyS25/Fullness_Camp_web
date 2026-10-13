@@ -64,3 +64,12 @@ puede llamar a `GET /api/notificaciones/procesar` con `Authorization: Bearer <CR
   pago idempotente, creación de cuenta y recuperación de contraseña (29 pruebas).
 - Se probó además de punta a punta en un navegador real (24 comprobaciones): compra, correo, primer ingreso, cambio de
   contraseña, acceso según pago, bloqueo por intentos, cambio de horario por una profesora y aviso a estudiantes.
+
+## Plan de estudios (pensum), docentes y certificados
+
+- **Módulos y temas por certificación** (`curriculum_modules`, `curriculum_topics`). El de Hatha Vinyasa 300 h se siembra una vez desde `src/data/pensum-seed.ts` (sale del PDF; no trae docentes ni horas). Para sembrar otra certificación, se agrega en ese archivo.
+- **Docentes** (`topic_teachers`): cada docente se asigna sus temas con modalidad (presencial, virtual o mixta), número de clases y horario en texto libre. Puede agregar temas, quitar los suyos y editar su asignación. La administración ve y asigna todo. Rutas: `/campus/profesor/temas` y `/campus/profesor/temas/[slug]`.
+- **Perfil de docente** (`teacher_profiles`): especialidad, bio, correo y WhatsApp de contacto y foto (por enlace; la subida de archivos está pendiente). Se llena en *Mi perfil*.
+- **Estudiantes**: `/campus/cursos` (cursos activos y terminados) y `/campus/cursos/[slug]` (plan de estudios con docentes y su contacto). Solo con inscripción activa.
+- **Curso terminado y certificado**: la administración lo marca en la página de la cohorte (*Marcar curso terminado*). Genera el código `FC-XXXXXXXX` y el certificado imprimible en `/campus/certificado/[id]`. Las terminadas dejan de recibir avisos de horario.
+- **Tesina** (obligatoria, se presenta a Lila) y **retiros** (fuera del valor del programa; precio especial a estudiantes activas) se muestran como avisos en el plan, no como temas.

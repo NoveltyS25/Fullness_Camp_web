@@ -6,7 +6,7 @@ import { programs } from "@/data/programs";
 import { getCohort, listCohortEnrollments, listCohortSessions } from "@/server/campus";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
-import { addSessionsAction, enrollManualAction, setCohortActiveAction, setEnrollmentStatusAction } from "../../actions";
+import { addSessionsAction, enrollManualAction, setCohortActiveAction, setCourseCompletedAction, setEnrollmentStatusAction } from "../../actions";
 
 export const metadata = { title: "Cohorte" };
 
@@ -92,9 +92,19 @@ export default async function CohortePage(props: PageProps<"/campus/admin/cohort
               <div>
                 <p className="text-lg font-bold">{e.full_name}</p>
                 <p className="text-muted">Cédula {e.cedula} · {e.email}{e.whatsapp_phone ? ` · WhatsApp ${e.whatsapp_phone}` : ""}</p>
-                <p className="text-sm font-medium text-clay-dark">{statusLabel[e.status]}</p>
+                <p className="text-sm font-medium text-clay-dark">{statusLabel[e.status]}{e.completed_at ? " · Curso terminado (certificado emitido)" : ""}</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                {e.status === "active" && (
+                  <form action={setCourseCompletedAction}>
+                    <input type="hidden" name="cohort_id" value={cohort.id} />
+                    <input type="hidden" name="enrollment_id" value={e.enrollment_id} />
+                    <input type="hidden" name="completed" value={e.completed_at ? "false" : "true"} />
+                    <button type="submit" className="min-h-12 rounded-full bg-clay-soft px-4 font-medium text-clay-dark hover:bg-clay hover:text-white">
+                      {e.completed_at ? "Reabrir curso" : "Marcar curso terminado"}
+                    </button>
+                  </form>
+                )}
                 {(["active", "paused", "cancelled"] as const).filter((s) => s !== e.status).map((s) => (
                   <form key={s} action={setEnrollmentStatusAction}>
                     <input type="hidden" name="cohort_id" value={cohort.id} />

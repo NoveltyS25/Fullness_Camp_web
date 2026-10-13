@@ -326,3 +326,67 @@ test("quejas: máximo 3 por hora desde la misma conexión", async () => {
 test("los días hábiles saltan sábados y domingos", () => {
   assert.equal(addBusinessDays(new Date("2026-10-09T12:00:00Z"), 1).toISOString().slice(0, 10), "2026-10-12"); // viernes → lunes
 });
+
+// ---------------------------------------------------------------- pensum (módulos, temas, docentes) y certificado
+
+import { addTopic, assignTopic, deleteTopic, getCertificate, getPensum, setCourseCompleted, unassignTopic } from "./curriculum.ts";
+
+const HATHA = "hatha-vinyasa-yoga-y-meditacion";
+
+async function pensumSetup() {
+  const db = await setup();
+  const admin = await createUser(db, { cedula: "1", fullName: "Admin", email: "a@x.co", role: "admin", password: "Correcta123" });
+  const t1 = await createUser(db, { cedula: "2", fullName: "Docente Uno", email: "t1@x.co", role: "teacher", password: "Correcta123" });
+  const t2 = await createUser(db, { cedula: "3", fullName: "Docente Dos", email: "t2@x.co", role: "teacher", password: "Correcta123" });
+  const stu = await createUser(db, { cedula: "4", fullName: "Estudiante", email: "s@x.co", role: "student", password: "Correcta123" });
+  return { db, admin, t1, t2, stu };
+}
+
+test("el pensum de Hatha se siembra una sola vez con módulos y temas", async () => {
+  const { db } = await pensumSetup();
+  const a = await getPensum(db, HATHA);
+  const b = await getPensum(db, HATHA);
+  assert.ok(a.length >= 5);
+  assert.equal(a.flatMap((m) => m.topics).length, b.flatMap((m) => m.topics).length);
+  assert.ok(a.every((m) => m.topics.every((t) => t.teachers.length === 0)));
+});
+
+test("una docente se asigna tema, horario y modalidad; solo a sí misma", async () => {
+  const { db, t1, t2 } = await pensumSetup();
+  const topic = (await getPensum(db, HATHA))[0].topics[0];
+  const input = { topicId: topic.id, userId: t1.id, modality: "virtual", classesCount: "4", scheduleNote: "Lunes 6 p. m." };
+  assert.deepEqual(await assignTopic(db, t1, input), { ok: true });
+  assert.equal((await assignTopic(db, t1, { ...input, userId: t2.id })).ok, false);
+  assert.equal((await assignTopic(db, t1, { ...input, modality: "otra" })).ok, false);
+  assert.equal((await assignTopic(db, t1, { ...input, classesCount: "0" })).ok, false);
+  const t = (await getPensum(db, HATHA))[0].topics[0];
+  assert.equal(t.teachers[0].classes_count, 4);
+  assert.equal(t.teachers[0].modality, "virtual");
+  await assignTopic(db, t1, { ...input, modality: "presencial" }); // editar no duplica
+  assert.equal((await getPensum(db, HATHA))[0].topics[0].teachers.length, 1);
+  assert.equal((await unassignTopic(db, t1, topic.id, t1.id)).ok, true);
+});
+
+test("una estudiante no puede editar el pensum; una docente no quita lo que dicta otra", async () => {
+  const { db, admin, t1, t2, stu } = await pensumSetup();
+  const m = (await getPensum(db, HATHA))[0];
+  assert.equal((await addTopic(db, stu, m.id, "Tema colado")).ok, false);
+  assert.equal((await addTopic(db, t1, m.id, "Tema nuevo de la docente")).ok, true);
+  const mine = (await getPensum(db, HATHA))[0].topics.find((t) => t.title === "Tema nuevo de la docente")!;
+  await assignTopic(db, t2, { topicId: mine.id, userId: t2.id, modality: "virtual", classesCount: "", scheduleNote: "" });
+  assert.equal((await deleteTopic(db, t1, mine.id)).ok, false); // otra docente lo dicta
+  assert.equal((await deleteTopic(db, admin, mine.id)).ok, true);
+});
+
+test("el certificado solo lo ve su dueña o la administración, y solo si el curso está terminado", async () => {
+  const { db, admin, t1, stu } = await pensumSetup();
+  const eid = newId();
+  await db.run("INSERT INTO enrollments (id, user_id, program_slug, status, created_at) VALUES (?, ?, ?, 'active', ?)", [eid, stu.id, HATHA, nowIso()]);
+  assert.equal(await getCertificate(db, stu, eid), undefined);
+  assert.equal((await setCourseCompleted(db, t1, eid, true)).ok, false);
+  assert.equal((await setCourseCompleted(db, admin, eid, true)).ok, true);
+  const cert = await getCertificate(db, stu, eid);
+  assert.match(cert!.certificate_code, /^FC-[A-Z0-9]{8}$/);
+  assert.equal(await getCertificate(db, t1, eid), undefined);
+  assert.ok(await getCertificate(db, admin, eid));
+});
