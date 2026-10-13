@@ -197,6 +197,48 @@ export async function createClass(db: Db, actor: Actor, i: ClassInput): Promise<
   return { ok: true, id };
 }
 
+export interface NewClassInput extends ClassInput {
+  startsAt: string; // ISO UTC de la primera clase
+  endsAt: string;
+  weeks: number;
+  location: string;
+  onlineUrl: string;
+}
+
+/**
+ * Crea la clase junto con su primer horario, con todos los datos obligatorios, para que aparezca de inmediato en el calendario.
+ * Presencial pide el lugar, virtual pide el enlace y mixta pide los dos.
+ */
+export async function createClassWithSessions(db: Db, actor: Actor, i: NewClassInput): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!isStaff(actor)) return { ok: false, error: "No tienes permiso." };
+  if (i.title.trim().length < 2) return { ok: false, error: "Escribe el nombre de la clase." };
+  if (!isModality(i.modality)) return { ok: false, error: "Elige si es presencial, virtual o mixta." };
+  if (i.description.trim().length < 5) return { ok: false, error: "Escribe una descripción corta de la clase." };
+  if (!Number.isInteger(i.weeks) || i.weeks < 1 || i.weeks > 40) return { ok: false, error: "Indica entre 1 y 40 semanas." };
+  if (!i.startsAt || !i.endsAt) return { ok: false, error: "Indica la fecha y la hora de inicio y de fin." };
+  if (new Date(i.endsAt) <= new Date(i.startsAt)) return { ok: false, error: "La hora de fin debe ser después de la de inicio." };
+  const needsPlace = i.modality !== "virtual";
+  const needsLink = i.modality !== "presencial";
+  if (needsPlace && !i.location.trim()) return { ok: false, error: "Escribe el lugar donde será la clase presencial." };
+  if (needsLink && !/^https?:\/\/\S+$/.test(i.onlineUrl.trim())) return { ok: false, error: "Pega el enlace de la clase virtual (empieza por https://)." };
+
+  return db.transaction(async (tx) => {
+    const created = await createClass(tx, actor, i);
+    if (!created.ok) return created;
+    const sessions = await addClassSessions(tx, actor, {
+      classId: created.id,
+      title: "",
+      startsAt: i.startsAt,
+      endsAt: i.endsAt,
+      weeks: i.weeks,
+      location: needsPlace ? i.location.trim() : null,
+      onlineUrl: needsLink ? i.onlineUrl.trim() : null,
+    });
+    if (!sessions.ok) throw new Error(sessions.error);
+    return created;
+  });
+}
+
 export async function updateClass(db: Db, actor: Actor, classId: string, i: ClassInput): Promise<Result> {
   const c = await getClassForActor(db, actor, classId);
   if (!c) return { ok: false, error: "No tienes permiso para cambiar esta clase." };

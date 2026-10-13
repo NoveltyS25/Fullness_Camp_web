@@ -470,3 +470,37 @@ test("una docente se crea sin cédula con un código provisional que no sirve pa
   assert.equal((await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Docente Nueva", email: "nueva@x.co", role: "teacher" }, "http://localhost:3000")).ok, false);
   assert.equal((await createStaffAccount(db, { role: "student" }, { cedula: null, fullName: "X", email: "x@x.co", role: "teacher" }, "http://localhost:3000")).ok, false);
 });
+
+// ---------------------------------------------------------------- crear una clase exige todos los datos y queda en el calendario
+
+import { createClassWithSessions } from "./classes.ts";
+import { getTeacherSessionsBetween } from "./campus.ts";
+
+const newClass = { title: "Marketing", modality: "virtual", description: "Cómo darte a conocer.", teacherId: undefined, ...FUTURE, weeks: 2, location: "", onlineUrl: "https://meet.google.com/abc-defg-hij" };
+
+test("crear una clase con su horario la deja de una vez en el calendario de la docente", async () => {
+  const { db, t1 } = await classesSetup();
+  const r = await createClassWithSessions(db, t1, newClass);
+  assert.ok(r.ok);
+  const sessions = await getTeacherSessionsBetween(db, t1.id, "2099-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z");
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions[0].class_title, "Marketing");
+  assert.equal(sessions[0].online_url, "https://meet.google.com/abc-defg-hij");
+});
+
+test("crear una clase: todos los campos son obligatorios, según la modalidad", async () => {
+  const { db, t1 } = await classesSetup();
+  const fails = async (patch: Partial<typeof newClass>) => (await createClassWithSessions(db, t1, { ...newClass, ...patch })).ok === false;
+  assert.ok(await fails({ title: "" }));
+  assert.ok(await fails({ description: "" }));
+  assert.ok(await fails({ modality: "otra" }));
+  assert.ok(await fails({ onlineUrl: "" })); // virtual pide el enlace
+  assert.ok(await fails({ onlineUrl: "no-es-un-enlace" }));
+  assert.ok(await fails({ weeks: 0 }));
+  assert.ok(await fails({ endsAt: FUTURE.startsAt })); // fin igual al inicio
+  assert.ok(await fails({ modality: "presencial", location: "", onlineUrl: "" })); // presencial pide el lugar
+  assert.ok(await fails({ modality: "mixta", location: "Sede Bogotá", onlineUrl: "" })); // mixta pide los dos
+  assert.equal((await listClasses(db)).length, 0, "ninguna clase a medias");
+  assert.ok((await createClassWithSessions(db, t1, { ...newClass, modality: "presencial", location: "Sede Bogotá", onlineUrl: "" })).ok);
+  assert.ok((await createClassWithSessions(db, t1, { ...newClass, modality: "mixta", location: "Sede Bogotá" })).ok);
+});

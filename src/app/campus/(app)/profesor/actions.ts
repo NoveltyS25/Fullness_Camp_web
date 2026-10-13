@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { fromLocalInput } from "@/lib/campus/time";
-import { addClassSessions, createClass, deleteClass, updateClass } from "@/server/classes";
+import { addClassSessions, createClassWithSessions, deleteClass, updateClass } from "@/server/classes";
+import type { FormState } from "@/app/campus/actions";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
 
@@ -18,12 +19,26 @@ async function requireStaff() {
 
 const back = (path: string, error?: string) => redirect(error ? `${path}?error=${encodeURIComponent(error)}` : `${path}?ok=1`);
 
-export async function createClassAction(fd: FormData) {
+/** Crea la clase con su primer horario (todo obligatorio) y lleva a la docente al mes de su primera clase, donde ya aparece. */
+export async function createClassAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireStaff();
-  const r = await createClass(getDb(), user, { title: text(fd, "title"), modality: text(fd, "modality"), description: text(fd, "description") });
+  const start = fromLocalInput(text(fd, "starts_at"));
+  const end = fromLocalInput(text(fd, "ends_at"));
+  if (!start || !end) return { error: "Indica la fecha y la hora de inicio y de fin." };
+  const r = await createClassWithSessions(getDb(), user, {
+    title: text(fd, "title"),
+    modality: text(fd, "modality"),
+    description: text(fd, "description"),
+    startsAt: start,
+    endsAt: end,
+    weeks: Number.parseInt(text(fd, "weeks"), 10),
+    location: text(fd, "location"),
+    onlineUrl: text(fd, "online_url"),
+  });
+  if (!r.ok) return { error: r.error };
   revalidatePath("/campus", "layout");
-  if (!r.ok) back("/campus/profesor", r.error);
-  else redirect(`/campus/profesor/clases/${r.id}?nueva=1`);
+  const mes = new Date(new Date(start).getTime() - 5 * 3600_000).toISOString().slice(0, 7);
+  redirect(`/campus/profesor?mes=${mes}&nueva=${r.id}`);
 }
 
 export async function updateClassAction(fd: FormData) {

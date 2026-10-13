@@ -1,16 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MonthCalendar } from "@/components/campus/MonthCalendar";
+import { NewClassForm } from "@/components/campus/NewClassForm";
 import { currentMonth, monthRangeIso, parseMonth } from "@/lib/campus/calendar";
 import { getTeacherSessionsBetween } from "@/server/campus";
 import { getTeacherClasses, MODALITIES } from "@/server/classes";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
-import { createClassAction } from "./actions";
 
 export const metadata = { title: "Mis clases" };
 
-const field = "min-h-12 w-full rounded-xl border-2 border-clay-soft bg-white px-3 text-lg";
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function MisClases(props: PageProps<"/campus/profesor">) {
@@ -40,6 +39,11 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
           ✓ Listo, quedó guardado tu registro. Tu primer paso: agrega abajo las clases que dictas y sus horarios.
         </p>
       )}
+      {one(q.nueva) && (
+        <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">
+          ✓ Clase creada. Ya aparece en tu calendario; puedes agregar más horarios entrando a la clase.
+        </p>
+      )}
       {notified !== null && !Number.isNaN(notified) && (
         <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">
           ✓ Cambio guardado.{" "}
@@ -62,7 +66,7 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
               <li key={c.id}>
                 <Link href={`/campus/profesor/clases/${c.id}`} className="block h-full rounded-3xl border border-clay-soft bg-white p-5 no-underline hover:border-clay-dark">
                   <span className="text-xl font-bold text-clay-dark">{c.title}</span>
-                  <span className="mt-1 block text-muted">{MODALITIES[c.modality]} · {c.upcoming_count} {c.upcoming_count === 1 ? "clase programada" : "clases programadas"}</span>
+                  <span className="mt-1 block text-muted">{MODALITIES[c.modality]} · {c.upcoming_count === 0 ? "Sin horarios: entra y agrégalos" : `${c.upcoming_count} ${c.upcoming_count === 1 ? "clase programada" : "clases programadas"}`}</span>
                   <span className="mt-1 block text-muted">
                     {c.programs.length === 0 ? "Aún no está en ninguna certificación" : `En ${c.programs.length} ${c.programs.length === 1 ? "certificación" : "certificaciones"}`}
                   </span>
@@ -75,24 +79,8 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
 
       <section aria-labelledby="nueva" className="max-w-2xl">
         <h2 id="nueva" className="mb-2 text-2xl font-bold">Agregar una clase</h2>
-        <p className="mb-4 text-muted">Escribe el nombre de lo que dictas (por ejemplo, «Marketing»). La administración la coloca en las certificaciones que corresponda; tú solo defines sus horarios.</p>
-        <form action={createClassAction} className="space-y-4">
-          <label className="block">
-            <span className="mb-1 block text-lg font-medium">Nombre de la clase</span>
-            <input name="title" required minLength={2} maxLength={160} className={field} />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-lg font-medium">Modalidad</span>
-            <select name="modality" defaultValue="virtual" className={field}>
-              {Object.entries(MODALITIES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-lg font-medium">Descripción <span className="font-normal text-muted">(opcional)</span></span>
-            <textarea name="description" rows={3} maxLength={600} className="w-full rounded-xl border-2 border-clay-soft bg-white p-3 text-lg" />
-          </label>
-          <button type="submit" className="btn btn-primary">Agregar clase</button>
-        </form>
+        <p className="mb-4 text-muted">Escribe lo que dictas (por ejemplo, «Marketing») y su primer horario: aparecerá de inmediato en tu calendario. La administración la coloca en las certificaciones que corresponda.</p>
+        <NewClassForm />
       </section>
     </div>
   );
