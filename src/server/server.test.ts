@@ -628,3 +628,18 @@ test("al crear la cuenta de Nitya, sus 10 clases quedan a su nombre y a nadie m�
   const alexa = (await listClasses(db)).find((c) => c.title === ANATOMIA)!;
   assert.equal(alexa.teacher_id, null, "Anatomía sigue esperando a Alexa");
 });
+
+// ---------------------------------------------------------------- Laboratorio de asanas (Lila): 8 clases
+
+test("el pensum de Hatha trae el Laboratorio de asanas con 8 clases, y queda a nombre de Lila cuando exista su cuenta", async () => {
+  const { db } = await classesSetup();
+  await getPensum(db, HATHA);
+  const lab = (await listClasses(db)).find((c) => c.title === "Laboratorio de asanas")!;
+  assert.equal(lab.teacher_id, null);
+  const lessons = await getClassLessons(db, lab.id);
+  assert.deepEqual(lessons.map((l) => l.title.split(":")[0]), ["Clase 1", "Clase 2", "Clase 3", "Clase 4", "Clase 5", "Clase 6", "Clase 7", "Clase 8"]);
+  assert.match(lessons[5].title, /Rishikesh/);
+  assert.equal((await listClasses(db)).some((c) => c.title.startsWith("Asanas: alineación")), false);
+  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Lila Govardhan", email: "AcademicoFullnessCamp@fullnesscamp.com", role: "teacher" }, "http://localhost:3000");
+  assert.equal((await listClasses(db)).find((c) => c.title === "Laboratorio de asanas")!.teacher_name, "Lila Govardhan");
+});

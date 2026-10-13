@@ -104,6 +104,22 @@ export const ANATOMIA_BIOMECANICA: SeedClass = {
   ],
 };
 
+/** Laboratorio de asanas (Lila Govardhan): 8 clases. El temario de cada una llega después; Lila lo agrega si quiere. */
+export const LABORATORIO_ASANAS: SeedClass = {
+  title: "Laboratorio de asanas",
+  teacherEmail: "academicofullnesscamp@fullnesscamp.com",
+  lessons: [
+    { title: "Clase 1: Surya Namaskara A y B", topics: [] },
+    { title: "Clase 2: Asanas de pie", topics: [] },
+    { title: "Clase 3: Asanas sentadas", topics: [] },
+    { title: "Clase 4: Posturas supinas", topics: [] },
+    { title: "Clase 5: Surya Namaskara clásico", topics: [] },
+    { title: "Clase 6: Serie de Rishikesh", topics: [] },
+    { title: "Clase 7: Formatos (estructura de clase)", topics: [] },
+    { title: "Clase 8: Metodología de la enseñanza", topics: [] },
+  ],
+};
+
 const NITYA = "nitya.portal@gmail.com";
 
 /** Filosofía del yoga (Nitya): 3 módulos; cada tema es una clase que él mismo dicta y a la que le pone horario. */
@@ -140,7 +156,7 @@ export const PENSUM_SEED: Record<string, SeedModule[]> = {
     ...FILOSOFIA_DEL_YOGA,
     {
       title: "Anatomía y asanas",
-      topics: [ANATOMIA_BIOMECANICA, "Asanas: alineación, beneficios y secuencias"],
+      topics: [ANATOMIA_BIOMECANICA, LABORATORIO_ASANAS],
     },
     {
       title: "Cuerpo energético",
