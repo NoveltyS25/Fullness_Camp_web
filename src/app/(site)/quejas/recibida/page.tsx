@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 export default async function Recibida(props: PageProps<"/quejas/recibida">) {
   const q = await props.searchParams;
   const raw = Array.isArray(q.radicado) ? q.radicado[0] : q.radicado;
+  const anonymous = (Array.isArray(q.anonima) ? q.anonima[0] : q.anonima) === "1";
   const code = /^Q-\d{8}-[A-Z0-9]{5}$/.test(raw ?? "") ? raw : null;
 
   return (
@@ -25,7 +26,9 @@ export default async function Recibida(props: PageProps<"/quejas/recibida">) {
         </p>
       )}
       <p className="mb-8 text-lg text-muted">
-        Te enviamos el radicado a tu correo. En un plazo de {REVIEW_BUSINESS_DAYS} días hábiles te informaremos si tu solicitud fue aceptada para evaluación o desestimada.
+        {anonymous
+          ? "Como la enviaste de forma anónima, no podemos escribirte: guarda este número, es la única forma de referirte a tu solicitud. La revisaremos dentro del plazo de la política."
+          : `Te enviamos el radicado a tu correo. En un plazo de ${REVIEW_BUSINESS_DAYS} días hábiles te informaremos si tu solicitud fue aceptada para evaluación o desestimada.`}
       </p>
       <Link href="/" className="btn btn-primary">Volver al inicio</Link>
     </main>

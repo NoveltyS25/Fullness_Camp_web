@@ -28,6 +28,8 @@ function makeCode(now: Date): string {
 
 export interface ComplaintInput {
   kind: ComplaintKind;
+  /** Si es true, no se guardan nombre, correo ni teléfono. */
+  anonymous: boolean;
   fullName: string;
   email: string;
   phone: string | null;
@@ -47,14 +49,15 @@ export async function createComplaint(db: Db, input: ComplaintInput): Promise<Co
   const recent = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM complaints WHERE ip_hash = ? AND created_at >= ?", [ipHash, hourAgo]);
   if (Number(recent?.n ?? 0) >= MAX_PER_HOUR) return { ok: false, error: "rate-limited" };
 
+  const anon = input.anonymous;
   const now = new Date();
   const code = makeCode(now);
   await db.run(
-    `INSERT INTO complaints (id, code, created_at, kind, full_name, email, phone, accused, description, event_date, event_place, witnesses, status, due_at, updated_at, ip_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recibida', ?, ?, ?)`,
+    `INSERT INTO complaints (id, code, created_at, kind, full_name, email, phone, accused, description, event_date, event_place, witnesses, status, due_at, updated_at, ip_hash, anonymous)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recibida', ?, ?, ?, ?)`,
     [
-      newId(), code, now.toISOString(), input.kind, input.fullName, input.email.toLowerCase(), input.phone, input.accused, input.description,
-      input.eventDate, input.eventPlace, input.witnesses, addBusinessDays(now, REVIEW_BUSINESS_DAYS).toISOString(), nowIso(), ipHash,
+      newId(), code, now.toISOString(), input.kind, anon ? "Anónima" : input.fullName, anon ? "" : input.email.toLowerCase(), anon ? null : input.phone, input.accused, input.description,
+      input.eventDate, input.eventPlace, input.witnesses, addBusinessDays(now, REVIEW_BUSINESS_DAYS).toISOString(), nowIso(), ipHash, anon ? 1 : 0,
     ],
   );
   return { ok: true, code };
@@ -77,11 +80,12 @@ export interface ComplaintRow {
   due_at: string;
   resolution: string | null;
   updated_at: string;
+  anonymous: number;
 }
 
 export function listComplaints(db: Db, limit = 300): Promise<ComplaintRow[]> {
   return db.all<ComplaintRow>(
-    `SELECT id, code, created_at, kind, full_name, email, phone, accused, description, event_date, event_place, witnesses, status, due_at, resolution, updated_at
+    `SELECT id, code, created_at, kind, full_name, email, phone, accused, description, event_date, event_place, witnesses, status, due_at, resolution, updated_at, anonymous
      FROM complaints ORDER BY created_at DESC LIMIT ?`,
     [limit],
   );

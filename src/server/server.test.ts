@@ -303,7 +303,7 @@ test("reseñas de Google: si todo falla devuelve null", async () => {
 
 import { addBusinessDays, createComplaint, listComplaints, updateComplaint } from "./complaints.ts";
 
-const complaint = { kind: "acoso" as const, fullName: "Ana Ruiz", email: "Ana@Example.com", phone: null, accused: "Docente X", description: "Descripción de lo ocurrido con detalle suficiente.", eventDate: null, eventPlace: null, witnesses: null, ip: "9.9.9.9" };
+const complaint = { kind: "acoso" as const, anonymous: false, fullName: "Ana Ruiz", email: "Ana@Example.com", phone: null, accused: "Docente X", description: "Descripción de lo ocurrido con detalle suficiente.", eventDate: null, eventPlace: null, witnesses: null, ip: "9.9.9.9" };
 
 test("una queja recibe radicado, queda confidencial en el panel y tiene plazo de 30 días hábiles", async () => {
   const db = await setup();
@@ -315,6 +315,16 @@ test("una queja recibe radicado, queda confidencial en el panel y tiene plazo de
   assert.ok(new Date(row.due_at).getTime() > Date.now() + 40 * 24 * 3600_000); // 30 hábiles ≥ 42 días corridos
   assert.equal(await updateComplaint(db, row.id, "desestimada", "No está en el alcance."), true);
   assert.equal((await listComplaints(db))[0].status, "desestimada");
+});
+
+test("una queja anónima no guarda nombre, correo ni teléfono", async () => {
+  const db = await setup();
+  await createComplaint(db, { ...complaint, anonymous: true, phone: "573001234567" });
+  const [row] = await listComplaints(db);
+  assert.equal(row.anonymous, 1);
+  assert.equal(row.full_name, "Anónima");
+  assert.equal(row.email, "");
+  assert.equal(row.phone, null);
 });
 
 test("quejas: máximo 3 por hora desde la misma conexión", async () => {
