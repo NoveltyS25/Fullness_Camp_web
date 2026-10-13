@@ -1,18 +1,114 @@
 /**
  * Pensum inicial de cada certificación (se siembra una sola vez en la base de datos; después lo editan las docentes y la administración).
- * Fuente: PDF de cada programa. Solo se incluyen temas que el PDF nombra; ni horas ni docentes se inventan:
- * cada docente se asigna a sus temas desde el campus.
+ * Fuente: PDF de cada programa. Solo se incluyen temas que el PDF nombra; ni horas ni horarios se inventan.
+ *
+ * Una clase puede traer su temario por encuentros («Clase 1», «Clase 2»…): la docente le pone fecha y hora a cada uno.
+ * `teacherEmail` deja la clase asignada a esa docente en cuanto exista su cuenta.
  */
-export interface SeedModule {
+export interface SeedLesson {
   title: string;
   topics: string[];
 }
+
+export interface SeedClass {
+  title: string;
+  teacherEmail?: string;
+  lessons?: SeedLesson[];
+}
+
+export interface SeedModule {
+  title: string;
+  topics: (string | SeedClass)[];
+}
+
+/** Programa «Anatomía y biomecánica del yoga» (Alexa Pabón), 8 clases. */
+export const ANATOMIA_BIOMECANICA: SeedClass = {
+  title: "Anatomía y biomecánica del yoga",
+  teacherEmail: "alexa24alexa10@gmail.com",
+  lessons: [
+    {
+      title: "Clase 1: Fundamentos y conceptos generales",
+      topics: ["Concepto de cuerpo, anatomía y biomecánica", "El centro de gravedad y la alineación", "Planos de movimiento", "Sistemas corporales y su relación con el movimiento"],
+    },
+    {
+      title: "Clase 2: Fundamentos y conceptos generales",
+      topics: ["Tipos de movimientos", "Sistema osteoarticular", "Sistema de fascias", "Sistema muscular", "Tipos de contracción muscular"],
+    },
+    {
+      title: "Clase 3: Anatomía y biomecánica de pie, tobillo y rodilla",
+      topics: [
+        "Huesos y articulaciones de pie, tobillo y rodilla",
+        "Músculos y movimientos de pie, tobillo y rodilla",
+        "Alteraciones biomecánicas",
+        "Alineación en la práctica",
+        "Consideraciones anatómicas en la práctica de yoga",
+      ],
+    },
+    {
+      title: "Clase 4: Anatomía y biomecánica de cadera y pelvis",
+      topics: [
+        "Huesos y articulaciones de cadera y pelvis",
+        "Músculos y movimientos de cadera y pelvis",
+        "Psoas, el músculo del alma",
+        "Generalidades del piso pélvico",
+        "Alteraciones biomecánicas",
+        "Alineación en la práctica",
+        "Consideraciones anatómicas en la práctica de yoga",
+      ],
+    },
+    {
+      title: "Clase 5: Anatomía y biomecánica de columna vertebral",
+      topics: [
+        "La columna y su relación con el canal central y los canales energéticos",
+        "Componentes de la columna vertebral",
+        "Curvaturas",
+        "Huesos y articulaciones de columna",
+        "Músculos y movimientos de columna vertebral",
+        "Alteraciones biomecánicas",
+        "Alineación en la práctica",
+        "Consideraciones anatómicas en la práctica de yoga",
+      ],
+    },
+    {
+      title: "Clase 6: Anatomía y biomecánica de miembros superiores",
+      topics: [
+        "Huesos y articulaciones de la cintura escapular",
+        "Músculos y movimientos de la cintura escapular",
+        "El manguito rotador",
+        "Huesos y articulaciones del codo y la muñeca",
+        "Músculos y movimientos del codo y la muñeca",
+        "Las manos",
+        "Huesos y articulaciones de las manos",
+        "Alteraciones biomecánicas",
+        "Alineación en la práctica",
+        "Consideraciones anatómicas en la práctica de yoga",
+      ],
+    },
+    {
+      title: "Clase 7: Anatomía y fisiología de la respiración",
+      topics: [
+        "La respiración",
+        "Respiración consciente",
+        "Componentes del sistema respiratorio",
+        "El proceso de la respiración",
+        "Patrones respiratorios",
+        "Control de la respiración",
+        "Factores que afectan la respiración",
+        "Consideraciones anatómicas en la práctica de yoga",
+      ],
+    },
+    {
+      title: "Clase 8: Integración de conocimientos",
+      topics: ["Descripción anatómica de un asana", "Análisis biomecánico de una secuencia", "Alineación en la práctica de un asana", "Evaluación final"],
+    },
+  ],
+};
 
 export const PENSUM_SEED: Record<string, SeedModule[]> = {
   "hatha-vinyasa-yoga-y-meditacion": [
     {
       title: "Fundamentos del yoga",
-      topics: ["Historia y filosofía", "Biomecánica aplicada al yoga", "Asanas: alineación, beneficios y secuencias"],
+      topics: ["Historia y filosofía", ANATOMIA_BIOMECANICA, "Asanas: alineación, beneficios y secuencias"],
     },
     {
       title: "Cuerpo energético",

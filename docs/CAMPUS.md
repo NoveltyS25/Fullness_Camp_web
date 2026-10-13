@@ -93,3 +93,10 @@ La administración marca el curso como terminado en la página de la cohorte (*M
 ## Panel de estudiante: horario mensual
 
 - *Mi horario* (`/campus`) muestra la cuadrícula mensual a todo el ancho, con las clases de **una** certificación a la vez. Si la estudiante tiene más de una, arriba a la derecha aparecen botones para cambiar (el mes y la certificación quedan en la dirección: `?cert=…&mes=…`). Al tocar una clase se abre una ventana con fecha, docente, modalidad, lugar o enlace, descripción y contacto de la docente.
+
+## Temario por clases (ej.: «Anatomía y biomecánica del yoga», Alexa Pabón)
+
+- Una clase puede traer un **temario por encuentros** (`class_lessons`: «Clase 1», «Clase 2»… cada una con su lista de temas). La docente le pone **fecha, hora y lugar o enlace a cada una** desde la página de la clase (*Mis clases → la clase → Temario y horarios*); se pide lugar si es presencial, enlace si es virtual, ambos si es mixta. Puede agregar o quitar clases del temario. Mover una ya programada usa «Cambiar horario» (avisa a las estudiantes).
+- Las estudiantes ven el temario en el plan de estudios y los temas del encuentro en la ventana de cada clase del calendario.
+- `src/data/pensum-seed.ts` define clases con temario y **docente prevista por correo** (`teacherEmail`): la clase queda a su nombre en cuanto se crea su cuenta (`claimSuggestedClasses`). Hoy: Anatomía y biomecánica del yoga → Alexa Pabón (8 clases, del PDF «Programa Anatomía y Biomecánica del Yoga»), dentro del módulo «Fundamentos del yoga» de Hatha 300 h, en lugar de «Biomecánica aplicada al yoga».
+- En una base que ya tenía el pensum sembrado: `node scripts/aplicar-anatomia.ts` (idempotente).

@@ -3,10 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { getProgram } from "@/data/programs";
 import { formatDay, formatRange } from "@/lib/campus/time";
 import { getClassSessions } from "@/server/campus";
-import { getClassForActor, getClassStudents, MODALITIES } from "@/server/classes";
+import { getClassForActor, getClassLessons, getClassStudents, MODALITIES } from "@/server/classes";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
-import { addSessionsAction, deleteClassAction, updateClassAction } from "../../actions";
+import { addLessonAction, addSessionsAction, deleteClassAction, deleteLessonAction, scheduleLessonAction, updateClassAction } from "../../actions";
 
 export const metadata = { title: "Mi clase" };
 
@@ -22,7 +22,7 @@ export default async function MiClase(props: PageProps<"/campus/profesor/clases/
   const db = getDb();
   const c = await getClassForActor(db, user, id);
   if (!c) notFound();
-  const [sessions, students] = await Promise.all([getClassSessions(db, id, new Date().toISOString()), getClassStudents(db, id)]);
+  const [sessions, students, lessons] = await Promise.all([getClassSessions(db, id, new Date().toISOString()), getClassStudents(db, id), getClassLessons(db, id)]);
   const error = one(q.error);
 
   return (
@@ -39,6 +39,89 @@ export default async function MiClase(props: PageProps<"/campus/profesor/clases/
       {one(q.nueva) && <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">✓ Clase creada. Ahora agrega sus horarios.</p>}
       {one(q.ok) && <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">✓ Guardado.</p>}
       {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-lg font-medium text-red-800">{error}</p>}
+
+      <section aria-labelledby="temario">
+        <h2 id="temario" className="mb-2 text-2xl font-bold">Temario y horarios de cada clase ({lessons.length})</h2>
+        <p className="mb-4 text-muted">
+          Cada clase del temario necesita su fecha y hora{c.modality !== "virtual" ? ", su lugar" : ""}{c.modality !== "presencial" ? " y su enlace de Meet" : ""}. Las estudiantes ven los temas y el horario en su calendario.
+        </p>
+        {lessons.length === 0 ? (
+          <p className="rounded-3xl border border-clay-soft bg-white p-6 text-lg">Esta clase aún no tiene temario por encuentros. Puedes agregarlo abajo, o usar «Agregar horarios» si solo se repite cada semana.</p>
+        ) : (
+          <ul className="space-y-4">
+            {lessons.map((l) => (
+              <li key={l.id} className="rounded-3xl border border-clay-soft bg-white p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <h3 className="text-xl font-bold text-clay-dark">{l.title}</h3>
+                  {l.session_id && l.starts_at && l.ends_at ? (
+                    <span className={`rounded-full px-3 py-1 text-sm font-medium ${l.status === "cancelled" ? "bg-red-50 text-red-900" : "bg-clay-soft text-clay-dark"}`}>
+                      {l.status === "cancelled" ? "Cancelada" : "Con horario"}
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-clay-dark px-3 py-1 text-sm font-medium text-clay-dark">Sin horario</span>
+                  )}
+                </div>
+                {l.topics.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-6 text-muted">{l.topics.map((t) => <li key={t}>{t}</li>)}</ul>}
+
+                {l.session_id && l.starts_at && l.ends_at ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-sand p-4">
+                    <p className="text-lg font-medium">{formatDay(l.starts_at)}, {formatRange(l.starts_at, l.ends_at)}</p>
+                    <Link href={`/campus/profesor/sesion/${l.session_id}`} className="btn btn-secondary">Cambiar horario</Link>
+                  </div>
+                ) : (
+                  <form action={scheduleLessonAction} className="mt-4 grid gap-3 rounded-2xl bg-sand p-4 sm:grid-cols-2">
+                    <input type="hidden" name="class_id" value={c.id} />
+                    <input type="hidden" name="lesson_id" value={l.id} />
+                    <label>
+                      <span className="mb-1 block font-medium">Inicia</span>
+                      <input name="starts_at" type="datetime-local" required className={field} />
+                    </label>
+                    <label>
+                      <span className="mb-1 block font-medium">Termina</span>
+                      <input name="ends_at" type="datetime-local" required className={field} />
+                    </label>
+                    {c.modality !== "virtual" && (
+                      <label>
+                        <span className="mb-1 block font-medium">Lugar</span>
+                        <input name="location" required className={field} />
+                      </label>
+                    )}
+                    {c.modality !== "presencial" && (
+                      <label>
+                        <span className="mb-1 block font-medium">Enlace (Meet)</span>
+                        <input name="online_url" type="url" required placeholder="https://meet.google.com/…" className={field} />
+                      </label>
+                    )}
+                    <div className="sm:col-span-2"><button type="submit" className="btn btn-primary">Poner horario a esta clase</button></div>
+                  </form>
+                )}
+
+                <form action={deleteLessonAction} className="mt-2">
+                  <input type="hidden" name="class_id" value={c.id} />
+                  <input type="hidden" name="lesson_id" value={l.id} />
+                  <button type="submit" className="min-h-12 rounded-full px-4 font-medium text-clay-dark underline hover:bg-clay-soft">Quitar esta clase del temario</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <details className="mt-4 max-w-2xl rounded-2xl bg-sand p-4">
+          <summary className="cursor-pointer font-medium text-clay-dark underline">Agregar una clase al temario</summary>
+          <form action={addLessonAction} className="mt-3 space-y-3">
+            <input type="hidden" name="class_id" value={c.id} />
+            <label className="block">
+              <span className="mb-1 block font-medium">Título</span>
+              <input name="title" required minLength={2} placeholder="Clase 9: …" className={field} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block font-medium">Temas (uno por línea)</span>
+              <textarea name="topics" rows={4} className="w-full rounded-xl border-2 border-clay-soft bg-white p-3 text-lg" />
+            </label>
+            <button type="submit" className="btn btn-primary">Agregar al temario</button>
+          </form>
+        </details>
+      </section>
 
       <section aria-labelledby="horarios">
         <h2 id="horarios" className="mb-4 text-2xl font-bold">Horarios ({sessions.length})</h2>

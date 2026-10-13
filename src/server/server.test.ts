@@ -537,3 +537,70 @@ test("el horario mensual de la estudiante muestra solo la certificación elegida
   await setCourseCompleted(db, admin, hathaEnrollment, true);
   assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).length, 0, "curso terminado: ya no tiene clases");
 });
+
+// ---------------------------------------------------------------- Anatomía y biomecánica (Alexa): temario por clases con horario propio
+
+import { addLesson, deleteLesson, getClassLessons, scheduleLesson } from "./classes.ts";
+
+const ANATOMIA = "Anatomía y biomecánica del yoga";
+
+async function anatomiaClass(db: Db) {
+  const row = (await listClasses(db)).find((c) => c.title === ANATOMIA)!;
+  return row;
+}
+
+test("el pensum de Hatha trae «Anatomía y biomecánica del yoga» con 8 clases y su docente prevista", async () => {
+  const { db } = await classesSetup();
+  await getPensum(db, HATHA);
+  const c = await anatomiaClass(db);
+  assert.equal(c.teacher_id, null);
+  const lessons = await getClassLessons(db, c.id);
+  assert.equal(lessons.length, 8);
+  assert.match(lessons[0].title, /^Clase 1/);
+  assert.match(lessons[7].title, /^Clase 8/);
+  assert.ok(lessons[6].topics.includes("Respiración consciente"));
+  assert.ok(lessons.every((l) => l.starts_at === null), "sin horario hasta que la docente lo ponga");
+});
+
+test("al crear la cuenta de Alexa, la clase de Anatomía queda a su nombre", async () => {
+  const { db } = await classesSetup();
+  await getPensum(db, HATHA);
+  assert.equal((await anatomiaClass(db)).teacher_id, null);
+  assert.equal((await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Alexa Pabón", email: "Alexa24alexa10@gmail.com", role: "teacher" }, "http://localhost:3000")).ok, true);
+  const c = await anatomiaClass(db);
+  assert.equal(c.teacher_name, "Alexa Pabón");
+  assert.equal(c.teacher_id !== null, true);
+});
+
+test("la docente le pone horario a cada clase del temario; una sola vez por clase y solo ella", async () => {
+  const { db, t2, stu, admin } = await classesSetup();
+  await getPensum(db, HATHA);
+  const alexa = await createUser(db, { cedula: "9", fullName: "Alexa", email: "alexa24alexa10@gmail.com", role: "teacher", password: "Correcta123" });
+  await db.run("UPDATE classes SET teacher_id = ? WHERE title = ?", [alexa.id, ANATOMIA]);
+  const c = await anatomiaClass(db);
+  const [l1, l2] = await getClassLessons(db, c.id);
+  const at = { startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: "", onlineUrl: "https://meet.google.com/abc-defg-hij" };
+
+  assert.equal((await scheduleLesson(db, t2, { lessonId: l1.id, ...at })).ok, false, "otra docente no puede");
+  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at, onlineUrl: "" })).ok, false, "virtual pide el enlace");
+  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at, endsAt: at.startsAt })).ok, false);
+  assert.deepEqual(await scheduleLesson(db, alexa, { lessonId: l1.id, ...at }), { ok: true });
+  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at })).ok, false, "ya tiene horario");
+  assert.deepEqual(await scheduleLesson(db, alexa, { lessonId: l2.id, ...at, startsAt: "2099-03-09T23:00:00.000Z", endsAt: "2099-03-10T01:00:00.000Z" }), { ok: true });
+
+  const lessons = await getClassLessons(db, c.id);
+  assert.equal(lessons.filter((l) => l.starts_at).length, 2);
+  // la estudiante de Hatha ve la clase con los temas del encuentro
+  await enroll(db, stu.id, HATHA);
+  const mine = await getStudentSessions(db, stu.id);
+  assert.equal(mine.length, 2);
+  assert.match(mine[0].lesson_topics ?? "", /Concepto de cuerpo/);
+  assert.equal(mine[0].title, l1.title);
+  // quitar una clase del temario borra su horario
+  assert.equal((await deleteLesson(db, t2, l2.id)).ok, false);
+  assert.equal((await deleteLesson(db, alexa, l2.id)).ok, true);
+  assert.equal((await getStudentSessions(db, stu.id)).length, 1);
+  assert.equal((await addLesson(db, alexa, c.id, "Clase 9: Repaso", "Tema A\nTema B")).ok, true);
+  assert.equal((await getClassLessons(db, c.id)).length, 8);
+  void admin;
+});

@@ -60,6 +60,20 @@ export default async function PlanDeEstudios(props: PageProps<"/campus/cursos/[s
                       ) : (
                         <p className="text-muted">Horario por definir</p>
                       )}
+                      {c.lessons.length > 0 && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer font-medium text-clay-dark underline">Ver temario ({c.lessons.length} clases)</summary>
+                          <ol className="mt-2 space-y-3">
+                            {c.lessons.map((l) => (
+                              <li key={l.id}>
+                                <p className="font-medium">{l.title}</p>
+                                <p className="text-muted">{l.starts_at && l.ends_at ? `${formatDay(l.starts_at)}, ${formatRange(l.starts_at, l.ends_at)}` : "Horario por definir"}</p>
+                                {l.topics.length > 0 && <ul className="list-disc pl-6 text-muted">{l.topics.map((t) => <li key={t}>{t}</li>)}</ul>}
+                              </li>
+                            ))}
+                          </ol>
+                        </details>
+                      )}
                     </li>
                   ))}
                 </ul>

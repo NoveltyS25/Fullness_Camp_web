@@ -39,6 +39,8 @@ class SqliteDb implements Db {
     this.addColumnIfMissing("enrollments", "completed_at", "TEXT");
     this.addColumnIfMissing("enrollments", "certificate_code", "TEXT");
     this.migrateToClasses();
+    this.addColumnIfMissing("sessions", "lesson_id", "TEXT REFERENCES class_lessons (id) ON DELETE SET NULL");
+    this.addColumnIfMissing("classes", "suggested_teacher_email", "TEXT");
     // Dentro de una transacción, "transaction" anidada solo ejecuta la función.
     this.txView = {
       all: (s, p) => this.all(s, p),

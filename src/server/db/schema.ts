@@ -109,14 +109,29 @@ CREATE TABLE IF NOT EXISTS classes (
   teacher_id TEXT REFERENCES users (id) ON DELETE SET NULL,
   modality TEXT NOT NULL DEFAULT 'virtual' CHECK (modality IN ('presencial', 'virtual', 'mixta')),
   description TEXT,
+  -- Docente prevista (por su correo): la clase se le asigna sola en cuanto exista su cuenta.
+  suggested_teacher_email TEXT,
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS classes_teacher_idx ON classes (teacher_id);
+
+-- Temario de una clase por encuentros («Clase 1», «Clase 2»…). La docente le pone fecha y hora a cada uno.
+-- topics = un tema por línea.
+CREATE TABLE IF NOT EXISTS class_lessons (
+  id TEXT PRIMARY KEY,
+  class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  topics TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS class_lessons_idx ON class_lessons (class_id, position);
 
 -- Cada encuentro de una clase con su fecha y hora. Lo ven las estudiantes de todas las certificaciones que incluyen esa clase.
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+  lesson_id TEXT REFERENCES class_lessons (id) ON DELETE SET NULL,
   title TEXT NOT NULL,
   starts_at TEXT NOT NULL,
   ends_at TEXT NOT NULL,

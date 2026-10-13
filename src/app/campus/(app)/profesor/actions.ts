@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { fromLocalInput } from "@/lib/campus/time";
-import { addClassSessions, createClassWithSessions, deleteClass, updateClass } from "@/server/classes";
+import { addClassSessions, addLesson, createClassWithSessions, deleteClass, deleteLesson, scheduleLesson, updateClass } from "@/server/classes";
 import type { FormState } from "@/app/campus/actions";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
@@ -41,6 +41,35 @@ export async function createClassAction(_prev: FormState, fd: FormData): Promise
   revalidatePath("/campus", "layout");
   const mes = new Date(new Date(start).getTime() - 5 * 3600_000).toISOString().slice(0, 7);
   redirect(`/campus/profesor?mes=${mes}&nueva=${r.id}`);
+}
+
+export async function addLessonAction(fd: FormData) {
+  const user = await requireStaff();
+  const id = text(fd, "class_id");
+  const r = await addLesson(getDb(), user, id, text(fd, "title"), String(fd.get("topics") ?? ""));
+  revalidatePath("/campus", "layout");
+  back(`/campus/profesor/clases/${id}`, r.ok ? undefined : r.error);
+}
+
+export async function deleteLessonAction(fd: FormData) {
+  const user = await requireStaff();
+  const id = text(fd, "class_id");
+  const r = await deleteLesson(getDb(), user, text(fd, "lesson_id"));
+  revalidatePath("/campus", "layout");
+  back(`/campus/profesor/clases/${id}`, r.ok ? undefined : r.error);
+}
+
+/** Le pone fecha, hora y lugar o enlace a una clase del temario. */
+export async function scheduleLessonAction(fd: FormData) {
+  const user = await requireStaff();
+  const id = text(fd, "class_id");
+  const path = `/campus/profesor/clases/${id}`;
+  const start = fromLocalInput(text(fd, "starts_at"));
+  const end = fromLocalInput(text(fd, "ends_at"));
+  if (!start || !end) return back(path, "Indica la fecha y la hora de inicio y de fin.");
+  const r = await scheduleLesson(getDb(), user, { lessonId: text(fd, "lesson_id"), startsAt: start, endsAt: end, location: text(fd, "location"), onlineUrl: text(fd, "online_url") });
+  revalidatePath("/campus", "layout");
+  back(path, r.ok ? undefined : r.error);
 }
 
 export async function updateClassAction(fd: FormData) {

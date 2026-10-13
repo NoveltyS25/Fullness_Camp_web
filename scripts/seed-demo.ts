@@ -63,7 +63,8 @@ for (const c of cohorts) {
 const hasClasses = await db.get("SELECT 1 AS ok FROM sessions LIMIT 1");
 if (!hasClasses) {
   const hatha = await getPensum(db, "hatha-vinyasa-yoga-y-meditacion");
-  const first3 = hatha.flatMap((m) => m.classes).slice(0, 3);
+  // Las clases con temario y docente prevista (como Anatomía, de Alexa) no se asignan a la docente demo.
+  const first3 = hatha.flatMap((m) => m.classes).filter((c) => c.lessons.length === 0).slice(0, 3);
   const days = [2, 4, 3];
   for (const [i, c] of first3.entries()) {
     await db.run("UPDATE classes SET teacher_id = ? WHERE id = ?", [teacher.id, c.class_id]);

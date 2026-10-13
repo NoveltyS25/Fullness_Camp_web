@@ -2,6 +2,7 @@ import { emailContent, greeting, whatsappSummary, type ChangeContext, type Sessi
 import { newId, nowIso, type Db } from "./db/index.ts";
 import { sendEmail, sendWhatsapp } from "./outbox.ts";
 import { createSetupLink } from "./auth.ts";
+import { claimSuggestedClasses } from "./classes.ts";
 import { generateTempPassword, hashPassword } from "./security.ts";
 import { manualAccountEmail } from "./templates.ts";
 import { findUserByCedula, PENDING_PREFIX, type Role, type User } from "./users.ts";
@@ -59,11 +60,12 @@ export interface SessionRow {
   description: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  lesson_topics: string | null;
 }
 
 const SESSION_SELECT = `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name,
-  c.description, tp.contact_email, tp.contact_phone
-  FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id LEFT JOIN teacher_profiles tp ON tp.user_id = c.teacher_id`;
+  c.description, tp.contact_email, tp.contact_phone, l.topics AS lesson_topics
+  FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id LEFT JOIN teacher_profiles tp ON tp.user_id = c.teacher_id LEFT JOIN class_lessons l ON l.id = s.lesson_id`;
 
 /** Clases de las certificaciones en las que la estudiante tiene una inscripción activa (sin terminar). */
 const STUDENT_CLASSES = `SELECT mc.class_id FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id
@@ -142,7 +144,7 @@ export interface EditableSession extends SessionRow {
 
 /** Solo la docente de la clase o la administración pueden ver una sesión para cambiarla. */
 export async function getSessionForActor(db: Db, actor: Pick<User, "id" | "role">, sessionId: string): Promise<EditableSession | undefined> {
-  const row = await db.get<EditableSession>(`SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name, c.teacher_id, c.description, NULL AS contact_email, NULL AS contact_phone
+  const row = await db.get<EditableSession>(`SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name, c.teacher_id, c.description, NULL AS contact_email, NULL AS contact_phone, NULL AS lesson_topics
      FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id WHERE s.id = ?`, [sessionId]);
   if (!row) return undefined;
   return actor.role === "admin" || row.teacher_id === actor.id ? row : undefined;
@@ -452,6 +454,7 @@ export async function createStaffAccount(
     `INSERT INTO users (id, cedula, full_name, email, role, password_hash, must_change_password, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
     [userId, cedula, s.fullName, s.email.toLowerCase(), s.role, hash, nowIso()],
   );
+  await claimSuggestedClasses(db, userId, s.email);
   await sendEmail(db, {
     to: s.email.toLowerCase(),
     ...manualAccountEmail({ fullName: s.fullName, cedula: s.cedula ?? "", setPasswordUrl: await createSetupLink(db, userId, baseUrl), programTitle: null, loginUrl: `${baseUrl}/campus/ingresar`, recoverUrl: `${baseUrl}/campus/recuperar` }),

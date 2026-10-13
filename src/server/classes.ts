@@ -1,4 +1,4 @@
-import { PENSUM_SEED } from "../data/pensum-seed.ts";
+import { PENSUM_SEED, type SeedClass } from "../data/pensum-seed.ts";
 import { newId, nowIso, type Db } from "./db/index.ts";
 import type { User } from "./users.ts";
 
@@ -31,6 +31,18 @@ export interface ClassItem {
   upcoming_count: number;
   next_start: string | null;
   next_end: string | null;
+  /** Temario por encuentros, con su fecha si la docente ya la programó. */
+  lessons: LessonRow[];
+}
+
+export interface LessonRow {
+  id: string;
+  title: string;
+  topics: string[];
+  starts_at: string | null;
+  ends_at: string | null;
+  session_id: string | null;
+  status: "scheduled" | "cancelled" | null;
 }
 
 export interface PensumModule {
@@ -49,10 +61,19 @@ export async function ensureSeed(db: Db, programSlug: string): Promise<void> {
     for (const [mi, m] of seed.entries()) {
       const moduleId = newId();
       await tx.run("INSERT INTO curriculum_modules (id, program_slug, position, title, created_at) VALUES (?, ?, ?, ?, ?)", [moduleId, programSlug, mi + 1, m.title, now]);
-      for (const [ci, title] of m.topics.entries()) {
+      for (const [ci, topic] of m.topics.entries()) {
+        const spec: SeedClass = typeof topic === "string" ? { title: topic } : topic;
         const classId = newId();
-        await tx.run("INSERT INTO classes (id, title, teacher_id, modality, created_at) VALUES (?, ?, NULL, 'virtual', ?)", [classId, title, now]);
+        const email = spec.teacherEmail?.toLowerCase() ?? null;
+        const teacher = email ? await tx.get<{ id: string }>("SELECT id FROM users WHERE email = ? AND role IN ('teacher', 'admin') AND cedula NOT LIKE 'PEND-%' ORDER BY created_at LIMIT 1", [email]) : undefined;
+        const anyTeacher = email && !teacher ? await tx.get<{ id: string }>("SELECT id FROM users WHERE email = ? AND role IN ('teacher', 'admin') ORDER BY created_at LIMIT 1", [email]) : undefined;
+        await tx.run("INSERT INTO classes (id, title, teacher_id, modality, suggested_teacher_email, created_at) VALUES (?, ?, ?, 'virtual', ?, ?)", [
+          classId, spec.title, teacher?.id ?? anyTeacher?.id ?? null, email, now,
+        ]);
         await tx.run("INSERT INTO module_classes (id, module_id, class_id, position) VALUES (?, ?, ?, ?)", [newId(), moduleId, classId, ci + 1]);
+        for (const [li, lesson] of (spec.lessons ?? []).entries()) {
+          await tx.run("INSERT INTO class_lessons (id, class_id, position, title, topics, created_at) VALUES (?, ?, ?, ?, ?, ?)", [newId(), classId, li + 1, lesson.title, lesson.topics.join("\n"), now]);
+        }
       }
     }
     await tx.run("INSERT INTO curriculum_seeded (program_slug) VALUES (?)", [programSlug]);
@@ -75,10 +96,23 @@ export async function getPensum(db: Db, programSlug: string): Promise<PensumModu
      WHERE m.program_slug = ? ORDER BY mc.position`,
     [now, now, now, programSlug],
   );
+  const lessonsByClass = new Map<string, LessonRow[]>();
+  for (const classId of new Set(items.map((i) => i.class_id))) lessonsByClass.set(classId, await getClassLessons(db, classId));
   return modules.map((m) => ({
     ...m,
-    classes: items.filter((i) => i.module_id === m.id).map((i) => ({ ...i, upcoming_count: Number(i.upcoming_count) })),
+    classes: items.filter((i) => i.module_id === m.id).map((i) => ({ ...i, upcoming_count: Number(i.upcoming_count), lessons: lessonsByClass.get(i.class_id) ?? [] })),
   }));
+}
+
+/** Temario de una clase, cada encuentro con su horario (si ya tiene). */
+export async function getClassLessons(db: Db, classId: string): Promise<LessonRow[]> {
+  const rows = await db.all<{ id: string; title: string; topics: string; starts_at: string | null; ends_at: string | null; session_id: string | null; status: "scheduled" | "cancelled" | null }>(
+    `SELECT l.id, l.title, l.topics, s.starts_at, s.ends_at, s.id AS session_id, s.status
+     FROM class_lessons l LEFT JOIN sessions s ON s.lesson_id = l.id
+     WHERE l.class_id = ? ORDER BY l.position`,
+    [classId],
+  );
+  return rows.map((r) => ({ ...r, topics: r.topics ? r.topics.split("\n").filter(Boolean) : [] }));
 }
 
 /** Programas que ya tienen pensum (o tienen uno inicial por sembrar). */
@@ -329,6 +363,63 @@ export async function addClassSessions(db: Db, actor: Actor, s: AddSessionsInput
     }
   });
   return { ok: true, created: weeks };
+}
+
+// ------------------------------------------------------------------ temario por encuentros
+
+export async function addLesson(db: Db, actor: Actor, classId: string, title: string, topics: string): Promise<Result> {
+  if (!(await getClassForActor(db, actor, classId))) return { ok: false, error: "No tienes permiso para cambiar esta clase." };
+  const clean = title.trim().slice(0, 200);
+  if (clean.length < 2) return { ok: false, error: "Escribe el título de la clase." };
+  const list = topics.split("\n").map((t) => t.trim()).filter(Boolean).slice(0, 40);
+  const last = await db.get<{ p: number | null }>("SELECT MAX(position) AS p FROM class_lessons WHERE class_id = ?", [classId]);
+  await db.run("INSERT INTO class_lessons (id, class_id, position, title, topics, created_at) VALUES (?, ?, ?, ?, ?, ?)", [
+    newId(), classId, Number(last?.p ?? 0) + 1, clean, list.join("\n"), nowIso(),
+  ]);
+  return { ok: true };
+}
+
+/** Quitar un encuentro del temario borra también su horario. */
+export async function deleteLesson(db: Db, actor: Actor, lessonId: string): Promise<Result> {
+  const l = await db.get<{ class_id: string }>("SELECT class_id FROM class_lessons WHERE id = ?", [lessonId]);
+  if (!l || !(await getClassForActor(db, actor, l.class_id))) return { ok: false, error: "No tienes permiso para cambiar esta clase." };
+  await db.transaction(async (tx) => {
+    await tx.run("DELETE FROM sessions WHERE lesson_id = ?", [lessonId]);
+    await tx.run("DELETE FROM class_lessons WHERE id = ?", [lessonId]);
+  });
+  return { ok: true };
+}
+
+export interface ScheduleLessonInput {
+  lessonId: string;
+  startsAt: string; // ISO UTC
+  endsAt: string;
+  location: string;
+  onlineUrl: string;
+}
+
+/** Le pone fecha, hora y lugar o enlace a un encuentro del temario (según la modalidad de la clase). */
+export async function scheduleLesson(db: Db, actor: Actor, i: ScheduleLessonInput): Promise<Result> {
+  const l = await db.get<{ class_id: string; title: string }>("SELECT class_id, title FROM class_lessons WHERE id = ?", [i.lessonId]);
+  const c = l ? await getClassForActor(db, actor, l.class_id) : undefined;
+  if (!l || !c) return { ok: false, error: "No tienes permiso para cambiar esta clase." };
+  if (new Date(i.endsAt) <= new Date(i.startsAt)) return { ok: false, error: "La hora de fin debe ser después de la de inicio." };
+  const needsPlace = c.modality !== "virtual";
+  const needsLink = c.modality !== "presencial";
+  if (needsPlace && !i.location.trim()) return { ok: false, error: "Escribe el lugar donde será la clase presencial." };
+  if (needsLink && !/^https?:\/\/\S+$/.test(i.onlineUrl.trim())) return { ok: false, error: "Pega el enlace de la clase virtual (empieza por https://)." };
+  if (await db.get("SELECT 1 AS ok FROM sessions WHERE lesson_id = ?", [i.lessonId])) return { ok: false, error: "Esta clase ya tiene horario. Para moverla usa «Cambiar horario»: así se avisa a las estudiantes." };
+
+  await db.run("INSERT INTO sessions (id, class_id, lesson_id, title, starts_at, ends_at, location, online_url, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)", [
+    newId(), c.id, i.lessonId, l.title, i.startsAt, i.endsAt, needsPlace ? i.location.trim() : null, needsLink ? i.onlineUrl.trim() : null, nowIso(),
+  ]);
+  return { ok: true };
+}
+
+/** Asigna a esta docente las clases que la administración dejó previstas para su correo. */
+export async function claimSuggestedClasses(db: Db, userId: string, email: string): Promise<number> {
+  const r = await db.run("UPDATE classes SET teacher_id = ? WHERE teacher_id IS NULL AND suggested_teacher_email = ?", [userId, email.toLowerCase()]);
+  return r.changes;
 }
 
 // ------------------------------------------------------------------ estudiantes de una clase
