@@ -1,4 +1,5 @@
 import { PENSUM_SEED, type SeedClass } from "../data/pensum-seed.ts";
+import { effectiveStatus, TEACHER_CHOICES, type ProgressStatus } from "../lib/campus/progress.ts";
 import { newId, nowIso, type Db } from "./db/index.ts";
 import type { User } from "./users.ts";
 
@@ -420,6 +421,104 @@ export async function scheduleLesson(db: Db, actor: Actor, i: ScheduleLessonInpu
 export async function claimSuggestedClasses(db: Db, userId: string, email: string): Promise<number> {
   const r = await db.run("UPDATE classes SET teacher_id = ? WHERE teacher_id IS NULL AND suggested_teacher_email = ?", [userId, email.toLowerCase()]);
   return r.changes;
+}
+
+// ------------------------------------------------------------------ avance de las estudiantes (aprobó, en curso, pendiente)
+
+export interface ProgressClass {
+  class_id: string;
+  title: string;
+  teacher_name: string | null;
+  status: ProgressStatus;
+  /** true si lo decidió la docente; false si es automático según las fechas. */
+  decided: boolean;
+  /** Inicio del ciclo: la primera clase programada de la asignatura. */
+  cycle_start: string | null;
+  cycle_end: string | null;
+}
+
+export interface ProgressModule {
+  id: string;
+  title: string;
+  classes: ProgressClass[];
+}
+
+export interface StudentProgress {
+  modules: ProgressModule[];
+  total: number;
+  approved: number;
+  inCourse: number;
+  pending: number;
+  notApproved: number;
+  /** Aprobó todas las asignaturas de la certificación (falta, además, la tesina y la confirmación de la escuela). */
+  allApproved: boolean;
+}
+
+/** Qué ha visto la estudiante de una certificación, en el orden del pensum, y qué le falta para graduarse. */
+export async function getStudentProgress(db: Db, userId: string, programSlug: string, now: Date = new Date()): Promise<StudentProgress> {
+  await ensureSeed(db, programSlug);
+  const rows = await db.all<{
+    module_id: string; module_title: string; class_id: string; title: string; teacher_name: string | null;
+    explicit: ProgressStatus | null; cycle_start: string | null; cycle_end: string | null;
+  }>(
+    `SELECT m.id AS module_id, m.title AS module_title, c.id AS class_id, c.title, u.full_name AS teacher_name, p.status AS explicit,
+            (SELECT MIN(s.starts_at) FROM sessions s WHERE s.class_id = c.id AND s.status = 'scheduled') AS cycle_start,
+            (SELECT MAX(s.ends_at) FROM sessions s WHERE s.class_id = c.id AND s.status = 'scheduled') AS cycle_end
+     FROM curriculum_modules m
+     JOIN module_classes mc ON mc.module_id = m.id
+     JOIN classes c ON c.id = mc.class_id
+     LEFT JOIN users u ON u.id = c.teacher_id
+     LEFT JOIN class_progress p ON p.class_id = c.id AND p.user_id = ?
+     WHERE m.program_slug = ? ORDER BY m.position, mc.position`,
+    [userId, programSlug],
+  );
+  const modules: ProgressModule[] = [];
+  const seen = new Set<string>();
+  const count: Record<ProgressStatus, number> = { pendiente: 0, en_curso: 0, aprobado: 0, no_aprobado: 0 };
+  for (const r of rows) {
+    let mod = modules.find((m) => m.id === r.module_id);
+    if (!mod) modules.push((mod = { id: r.module_id, title: r.module_title, classes: [] }));
+    const status = effectiveStatus(r.explicit, r.cycle_start, now);
+    mod.classes.push({ class_id: r.class_id, title: r.title, teacher_name: r.teacher_name, status, decided: r.explicit !== null, cycle_start: r.cycle_start, cycle_end: r.cycle_end });
+    if (!seen.has(r.class_id)) {
+      seen.add(r.class_id);
+      count[status]++;
+    }
+  }
+  const total = seen.size;
+  return { modules, total, approved: count.aprobado, inCourse: count.en_curso, pending: count.pendiente, notApproved: count.no_aprobado, allApproved: total > 0 && count.aprobado === total };
+}
+
+export interface ClassStudentProgress extends ClassStudent {
+  status: ProgressStatus;
+  decided: boolean;
+}
+
+/** Estudiantes de la clase con su estado en ella (para que la docente lo marque). */
+export async function getClassStudentsProgress(db: Db, classId: string, now: Date = new Date()): Promise<ClassStudentProgress[]> {
+  const cycle = await db.get<{ cycle_start: string | null }>("SELECT MIN(starts_at) AS cycle_start FROM sessions WHERE class_id = ? AND status = 'scheduled'", [classId]);
+  const students = await getClassStudents(db, classId);
+  const marks = await db.all<{ user_id: string; status: ProgressStatus }>("SELECT user_id, status FROM class_progress WHERE class_id = ?", [classId]);
+  const byUser = new Map(marks.map((m) => [m.user_id, m.status]));
+  return students.map((s) => ({ ...s, status: effectiveStatus(byUser.get(s.user_id) ?? null, cycle?.cycle_start ?? null, now), decided: byUser.has(s.user_id) }));
+}
+
+/** Solo la docente de la asignatura decide el resultado de sus estudiantes («automatico» deshace su decisión). */
+export async function setClassProgress(db: Db, actor: Actor, classId: string, userId: string, choice: string): Promise<Result> {
+  if (!(TEACHER_CHOICES as readonly string[]).includes(choice)) return { ok: false, error: "Elige un estado." };
+  const c = await db.get<{ teacher_id: string | null }>("SELECT teacher_id FROM classes WHERE id = ?", [classId]);
+  if (!c || !isStaff(actor) || c.teacher_id !== actor.id) return { ok: false, error: "Solo la docente de esta asignatura puede cambiar el estado de sus estudiantes." };
+  const students = await getClassStudents(db, classId);
+  if (!students.some((s) => s.user_id === userId)) return { ok: false, error: "Esa persona no está inscrita en una certificación que incluya esta asignatura." };
+  if (choice === "automatico") {
+    await db.run("DELETE FROM class_progress WHERE user_id = ? AND class_id = ?", [userId, classId]);
+  } else {
+    const changed = await db.run("UPDATE class_progress SET status = ?, updated_by = ?, updated_at = ? WHERE user_id = ? AND class_id = ?", [choice, actor.id, nowIso(), userId, classId]);
+    if (changed.changes === 0) {
+      await db.run("INSERT INTO class_progress (user_id, class_id, status, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)", [userId, classId, choice, actor.id, nowIso()]);
+    }
+  }
+  return { ok: true };
 }
 
 // ------------------------------------------------------------------ estudiantes de una clase

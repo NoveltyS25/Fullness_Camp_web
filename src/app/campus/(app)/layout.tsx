@@ -18,6 +18,7 @@ const pill = "inline-flex min-h-12 items-center rounded-full px-4 font-medium te
 const NAV: Record<View, { href: string; label: string }[]> = {
   student: [
     { href: "/campus", label: "Mi horario" },
+    { href: "/campus/avance", label: "Mi avance" },
     { href: "/campus/cursos", label: "Mis cursos" },
   ],
   teacher: [

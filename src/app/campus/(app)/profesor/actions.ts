@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { fromLocalInput } from "@/lib/campus/time";
-import { addClassSessions, addLesson, createClassWithSessions, deleteClass, deleteLesson, scheduleLesson, updateClass } from "@/server/classes";
+import { addClassSessions, addLesson, createClassWithSessions, deleteClass, deleteLesson, scheduleLesson, setClassProgress, updateClass } from "@/server/classes";
 import type { FormState } from "@/app/campus/actions";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
@@ -70,6 +70,15 @@ export async function scheduleLessonAction(fd: FormData) {
   const r = await scheduleLesson(getDb(), user, { lessonId: text(fd, "lesson_id"), startsAt: start, endsAt: end, location: text(fd, "location"), onlineUrl: text(fd, "online_url") });
   revalidatePath("/campus", "layout");
   back(path, r.ok ? undefined : r.error);
+}
+
+/** La docente marca si una estudiante aprobó, no aprobó o está en curso en su asignatura. */
+export async function setProgressAction(fd: FormData) {
+  const user = await requireStaff();
+  const id = text(fd, "class_id");
+  const r = await setClassProgress(getDb(), user, id, text(fd, "user_id"), text(fd, "status"));
+  revalidatePath("/campus", "layout");
+  back(`/campus/profesor/clases/${id}`, r.ok ? undefined : r.error);
 }
 
 export async function updateClassAction(fd: FormData) {

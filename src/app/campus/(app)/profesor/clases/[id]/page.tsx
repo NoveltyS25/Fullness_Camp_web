@@ -3,10 +3,11 @@ import { notFound, redirect } from "next/navigation";
 import { getProgram } from "@/data/programs";
 import { formatDay, formatRange } from "@/lib/campus/time";
 import { getClassSessions } from "@/server/campus";
-import { getClassForActor, getClassLessons, getClassStudents, MODALITIES } from "@/server/classes";
+import { CHOICE_LABEL, PROGRESS_LABEL, PROGRESS_TONE, TEACHER_CHOICES } from "@/lib/campus/progress";
+import { getClassForActor, getClassLessons, getClassStudentsProgress, MODALITIES } from "@/server/classes";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
-import { addLessonAction, addSessionsAction, deleteClassAction, deleteLessonAction, scheduleLessonAction, updateClassAction } from "../../actions";
+import { addLessonAction, addSessionsAction, deleteClassAction, deleteLessonAction, scheduleLessonAction, setProgressAction, updateClassAction } from "../../actions";
 
 export const metadata = { title: "Mi clase" };
 
@@ -22,7 +23,7 @@ export default async function MiClase(props: PageProps<"/campus/profesor/clases/
   const db = getDb();
   const c = await getClassForActor(db, user, id);
   if (!c) notFound();
-  const [sessions, students, lessons] = await Promise.all([getClassSessions(db, id, new Date().toISOString()), getClassStudents(db, id), getClassLessons(db, id)]);
+  const [sessions, students, lessons] = await Promise.all([getClassSessions(db, id, new Date().toISOString()), getClassStudentsProgress(db, id), getClassLessons(db, id)]);
   const error = one(q.error);
 
   return (
@@ -181,15 +182,32 @@ export default async function MiClase(props: PageProps<"/campus/profesor/clases/
       </section>
 
       <section aria-labelledby="estudiantes">
-        <h2 id="estudiantes" className="mb-4 text-2xl font-bold">Estudiantes de esta clase ({students.length})</h2>
+        <h2 id="estudiantes" className="mb-2 text-2xl font-bold">Estudiantes de esta clase ({students.length})</h2>
+        <p className="mb-4 text-muted">
+          Cuando empieza el ciclo de tu clase, cada estudiante pasa sola a «En curso». Tú decides si la <strong>aprueba</strong> o no: solo tú puedes cambiarlo, y ella lo ve en «Mi avance».
+        </p>
         {students.length === 0 ? (
           <p className="rounded-3xl border border-clay-soft bg-white p-6 text-lg">Todavía no hay estudiantes: aparecerán cuando la clase esté en una certificación con inscritas.</p>
         ) : (
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="space-y-3">
             {students.map((s) => (
-              <li key={`${s.user_id}-${s.program_slug}`} className="flex items-center justify-between gap-3 rounded-2xl border border-clay-soft bg-white px-4 py-3">
-                <span className="font-medium">{s.full_name}</span>
-                <span className="rounded-full bg-clay-soft px-3 py-1 text-sm text-clay-dark">{getProgram(s.program_slug)?.title ?? s.program_slug}</span>
+              <li key={`${s.user_id}-${s.program_slug}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-clay-soft bg-white p-4">
+                <div>
+                  <p className="text-lg font-medium">{s.full_name}</p>
+                  <span className="mt-1 inline-block rounded-full bg-clay-soft px-3 py-1 text-sm text-clay-dark">{getProgram(s.program_slug)?.title ?? s.program_slug}</span>
+                </div>
+                <form action={setProgressAction} className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="class_id" value={c.id} />
+                  <input type="hidden" name="user_id" value={s.user_id} />
+                  <span className={`rounded-full px-3 py-1 text-sm font-medium ${PROGRESS_TONE[s.status]}`}>{PROGRESS_LABEL[s.status]}</span>
+                  <label>
+                    <span className="sr-only">Estado de {s.full_name}</span>
+                    <select name="status" defaultValue={s.decided ? s.status : "automatico"} className={field}>
+                      {TEACHER_CHOICES.map((v) => <option key={v} value={v}>{CHOICE_LABEL[v]}</option>)}
+                    </select>
+                  </label>
+                  <button type="submit" className="btn btn-secondary">Guardar</button>
+                </form>
               </li>
             ))}
           </ul>

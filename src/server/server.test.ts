@@ -665,10 +665,21 @@ test("el pensum de Hatha trae la parte de Ayurveda de Lila (4 clases) y conserva
   const { db } = await classesSetup();
   const modules = await getPensum(db, HATHA);
   const mod = modules.find((m) => m.classes.some((c) => c.title === "Ayurveda: parte de Lila"))!;
-  assert.deepEqual(mod.classes.map((c) => c.title), ["Ayurveda: parte de Lila", "Taller de cocina ayurveda creativa 1", "Taller de cocina ayurveda creativa 2"]);
+  assert.deepEqual(mod.classes.map((c) => c.title), ["Ayurveda: parte de Lila", "Ayurveda: parte de la Dra. Celi", "Taller de cocina ayurveda creativa 1", "Taller de cocina ayurveda creativa 2"]);
   const lessons = await getClassLessons(db, mod.classes[0].class_id);
   assert.deepEqual(lessons.map((l) => l.title), ["Clase 1: Generalidades del Ayurveda", "Clase 2: Dinacharya y Ratricharya", "Clase 3: Doshas", "Clase 4: Alimentación"]);
   assert.equal((await listClasses(db)).some((c) => c.title === "Doshas y gunas"), false);
+});
+
+test("Ayurveda de la Dra. Celi: 7 clases, y queda a su nombre por el correo de su cuenta", async () => {
+  const { db } = await classesSetup();
+  const celi = (await getPensum(db, HATHA)).flatMap((m) => m.classes).find((c) => c.title === "Ayurveda: parte de la Dra. Celi")!;
+  const lessons = await getClassLessons(db, celi.class_id);
+  assert.equal(lessons.length, 7);
+  assert.match(lessons[1].title, /Rasayana/);
+  assert.match(lessons[6].title, /Climaterio/);
+  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Dra. Cely Arengas", email: "DraCelyMargarita@gmail.com", role: "teacher" }, "http://localhost:3000");
+  assert.equal((await listClasses(db)).find((c) => c.title === "Ayurveda: parte de la Dra. Celi")!.teacher_name, "Dra. Cely Arengas");
 });
 
 // ---------------------------------------------------------------- Marketing digital (Paula): 6 clases
@@ -685,4 +696,53 @@ test("el pensum de Hatha trae Marketing digital (6 clases con tema y objetivo pr
   // se asigna a la cuenta de Paula por su correo de administración
   await createStaffAccount(db, { role: "admin" }, { cedula: "1010231015", fullName: "Paula Salazar", email: "noveltystudioscolombia@gmail.com", role: "admin" }, "http://localhost:3000");
   assert.equal((await listClasses(db)).find((c) => c.title === "Marketing digital")!.teacher_name, "Paula Salazar");
+});
+
+// ---------------------------------------------------------------- avance de la estudiante: pendiente, en curso, aprobada
+
+import { getClassStudentsProgress, getStudentProgress, setClassProgress } from "./classes.ts";
+
+test("el avance es automático (pendiente antes del ciclo, en curso después) y solo la docente de la clase marca aprobada o no", async () => {
+  const { db, admin, t1, t2, stu } = await classesSetup();
+  const stu2 = await createUser(db, { cedula: "6", fullName: "Otra", email: "s6@x.co", role: "student", password: "Correcta123" });
+  const mk = async (title: string) => {
+    const r = await createClass(db, t1, { title, modality: "virtual", description: "" });
+    return r.ok ? r.id : "";
+  };
+  const [futura, empezada, tercera] = [await mk("Futura"), await mk("Empezada"), await mk("Tercera")];
+  const mod = (await getPensum(db, HATHA))[0].id;
+  for (const id of [futura, empezada, tercera]) await placeClass(db, admin, mod, id);
+  await addClassSessions(db, t1, { classId: futura, title: "", ...FUTURE, weeks: 1, location: null, onlineUrl: null });
+  await addClassSessions(db, t1, { classId: empezada, title: "", startsAt: "2020-01-07T23:00:00.000Z", endsAt: "2020-01-08T01:00:00.000Z", weeks: 1, location: null, onlineUrl: null });
+  await enroll(db, stu.id, HATHA);
+
+  const status = async (title: string, userId = stu.id) =>
+    (await getStudentProgress(db, userId, HATHA)).modules.flatMap((m) => m.classes).find((c) => c.title === title)!;
+  assert.equal((await status("Futura")).status, "pendiente");
+  assert.equal((await status("Empezada")).status, "en_curso", "empezó su ciclo: en curso por defecto");
+  assert.equal((await status("Tercera")).status, "pendiente", "sin fechas: pendiente");
+  assert.ok((await status("Futura")).cycle_start, "muestra cuándo inicia su ciclo");
+
+  // solo la docente de la clase, y solo a estudiantes inscritas en una certificación con esa clase
+  assert.equal((await setClassProgress(db, t2, empezada, stu.id, "aprobado")).ok, false, "otra docente no puede");
+  assert.equal((await setClassProgress(db, admin, empezada, stu.id, "aprobado")).ok, false, "ni siquiera la administración");
+  assert.equal((await setClassProgress(db, stu, empezada, stu.id, "aprobado")).ok, false, "ni la estudiante");
+  assert.equal((await setClassProgress(db, t1, empezada, stu2.id, "aprobado")).ok, false, "no inscrita");
+  assert.equal((await setClassProgress(db, t1, empezada, stu.id, "excelente")).ok, false, "estado inválido");
+  assert.deepEqual(await setClassProgress(db, t1, empezada, stu.id, "aprobado"), { ok: true });
+  assert.deepEqual(await setClassProgress(db, t1, futura, stu.id, "no_aprobado"), { ok: true });
+  assert.equal((await status("Empezada")).status, "aprobado");
+  assert.equal((await status("Futura")).status, "no_aprobado");
+
+  const p = await getStudentProgress(db, stu.id, HATHA);
+  assert.equal(p.approved, 1);
+  assert.equal(p.notApproved, 1);
+  assert.equal(p.allApproved, false);
+  assert.equal(p.total, p.approved + p.inCourse + p.pending + p.notApproved);
+
+  // la docente ve el estado de cada estudiante y puede volver a lo automático
+  const roster = await getClassStudentsProgress(db, empezada);
+  assert.deepEqual(roster.map((r) => [r.full_name, r.status, r.decided]), [["Estudiante", "aprobado", true]]);
+  await setClassProgress(db, t1, empezada, stu.id, "automatico");
+  assert.equal((await status("Empezada")).status, "en_curso");
 });

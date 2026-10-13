@@ -10,6 +10,13 @@ export function formatDay(iso: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const dateFmt = new Intl.DateTimeFormat("es-CO", { timeZone: TZ, day: "numeric", month: "long", year: "numeric" });
+
+/** Fecha sin día de la semana, por ejemplo «12 de enero de 2027». */
+export function formatDate(iso: string): string {
+  return dateFmt.format(new Date(iso));
+}
+
 export function formatTime(iso: string): string {
   // Intl usa un espacio especial antes de a. m. / p. m.; se normaliza a un espacio común.
   return timeFmt.format(new Date(iso)).replace(/\s/g, " ");

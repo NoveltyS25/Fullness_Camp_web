@@ -187,6 +187,21 @@ export const AYURVEDA_LILA: SeedClass = {
   ],
 };
 
+/** Ayurveda: la otra parte, de la Dra. Cely Margarita Arengas (7 clases), centrada en la salud de la mujer. */
+export const AYURVEDA_CELI: SeedClass = {
+  title: "Ayurveda: parte de la Dra. Celi",
+  teacherEmail: "dracelymargarita@gmail.com",
+  lessons: [
+    { title: "Clase 1: Ayurveda para la mujer", topics: [] },
+    { title: "Clase 2: Rasayana", topics: [] },
+    { title: "Clase 3: Ciclo femenino", topics: [] },
+    { title: "Clase 4: Alteraciones del ciclo femenino", topics: [] },
+    { title: "Clase 5: Ayurveda durante la gestación", topics: [] },
+    { title: "Clase 6: Parto y posparto", topics: [] },
+    { title: "Clase 7: Climaterio, aborto y abuso sexual", topics: [] },
+  ],
+};
+
 /** Laboratorio de asanas (Lila Govardhan): 8 clases. El temario de cada una llega después; Lila lo agrega si quiere. */
 export const LABORATORIO_ASANAS: SeedClass = {
   title: "Laboratorio de asanas",
@@ -257,6 +272,7 @@ export const PENSUM_SEED: Record<string, SeedModule[]> = {
       title: "Ayurveda y yoga de la alimentación",
       topics: [
         AYURVEDA_LILA,
+        AYURVEDA_CELI,
         "Taller de cocina ayurveda creativa 1",
         "Taller de cocina ayurveda creativa 2",
       ],

@@ -215,6 +215,17 @@ CREATE TABLE IF NOT EXISTS module_classes (
 );
 CREATE INDEX IF NOT EXISTS module_classes_class_idx ON module_classes (class_id);
 
+-- Resultado de cada estudiante en cada asignatura (clase). Solo existe cuando la docente lo decide;
+-- sin fila, el estado es automático: pendiente antes de que empiece el ciclo y en curso después.
+CREATE TABLE IF NOT EXISTS class_progress (
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('en_curso', 'aprobado', 'no_aprobado')),
+  updated_by TEXT REFERENCES users (id) ON DELETE SET NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, class_id)
+);
+
 -- Para no volver a sembrar el pensum inicial de un programa si la administración lo borra a propósito.
 CREATE TABLE IF NOT EXISTS curriculum_seeded (
   program_slug TEXT PRIMARY KEY
