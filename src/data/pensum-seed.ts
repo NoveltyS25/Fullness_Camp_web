@@ -104,11 +104,43 @@ export const ANATOMIA_BIOMECANICA: SeedClass = {
   ],
 };
 
+const NITYA = "nitya.portal@gmail.com";
+
+/** Filosofía del yoga (Nitya): 3 módulos; cada tema es una clase que él mismo dicta y a la que le pone horario. */
+export const FILOSOFIA_DEL_YOGA: SeedModule[] = [
+  {
+    title: "Filosofía del yoga: Historia",
+    topics: [
+      { title: "Cultura Arya y civilización védica: contexto histórico", teacherEmail: NITYA },
+      { title: "Yoga: etimología y camino", teacherEmail: NITYA },
+    ],
+  },
+  {
+    title: "Filosofía del yoga: Fundamentos",
+    topics: [
+      { title: "Los 6 Darshanas", teacherEmail: NITYA },
+      { title: "Los 4 caminos", teacherEmail: NITYA },
+      { title: "Los 8 pasos", teacherEmail: NITYA },
+    ],
+  },
+  {
+    title: "Filosofía del yoga: Principios y cosmovisión",
+    topics: [
+      { title: "Dharma", teacherEmail: NITYA },
+      { title: "Karma", teacherEmail: NITYA },
+      { title: "Moksha", teacherEmail: NITYA },
+      { title: "Brahman", teacherEmail: NITYA },
+      { title: "Gunas", teacherEmail: NITYA },
+    ],
+  },
+];
+
 export const PENSUM_SEED: Record<string, SeedModule[]> = {
   "hatha-vinyasa-yoga-y-meditacion": [
+    ...FILOSOFIA_DEL_YOGA,
     {
-      title: "Fundamentos del yoga",
-      topics: ["Historia y filosofía", ANATOMIA_BIOMECANICA, "Asanas: alineación, beneficios y secuencias"],
+      title: "Anatomía y asanas",
+      topics: [ANATOMIA_BIOMECANICA, "Asanas: alineación, beneficios y secuencias"],
     },
     {
       title: "Cuerpo energético",

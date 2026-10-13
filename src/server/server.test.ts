@@ -604,3 +604,27 @@ test("la docente le pone horario a cada clase del temario; una sola vez por clas
   assert.equal((await getClassLessons(db, c.id)).length, 8);
   void admin;
 });
+
+// ---------------------------------------------------------------- Filosofía del yoga (Nitya): 3 módulos, 10 clases
+
+test("el pensum de Hatha trae Filosofía del yoga: 3 módulos y 10 clases de Nitya", async () => {
+  const { db } = await classesSetup();
+  const modules = await getPensum(db, HATHA);
+  const filo = modules.filter((m) => m.title.startsWith("Filosofía del yoga:"));
+  assert.deepEqual(filo.map((m) => m.classes.length), [2, 3, 5]);
+  assert.equal(modules[0].title, "Filosofía del yoga: Historia", "van primero");
+  const titles = filo.flatMap((m) => m.classes.map((c) => c.title));
+  assert.ok(titles.includes("Los 6 Darshanas") && titles.includes("Karma") && titles.includes("Gunas"));
+  assert.ok(filo.every((m) => m.classes.every((c) => c.teacher_id === null)), "sin cuenta aún, sin docente");
+  assert.equal(modules.some((m) => m.classes.some((c) => c.title === "Historia y filosofía")), false);
+});
+
+test("al crear la cuenta de Nitya, sus 10 clases quedan a su nombre y a nadie más", async () => {
+  const { db } = await classesSetup();
+  await getPensum(db, HATHA);
+  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Nitya", email: "Nitya.Portal@gmail.com", role: "teacher" }, "http://localhost:3000");
+  const mine = (await listClasses(db)).filter((c) => c.teacher_name === "Nitya");
+  assert.equal(mine.length, 10);
+  const alexa = (await listClasses(db)).find((c) => c.title === ANATOMIA)!;
+  assert.equal(alexa.teacher_id, null, "Anatomía sigue esperando a Alexa");
+});
