@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MonthCalendar } from "@/components/campus/MonthCalendar";
-import { SessionCard } from "@/components/campus/SessionCard";
 import { getProgram } from "@/data/programs";
-import { currentMonth, monthRangeIso, monthTitle, parseMonth } from "@/lib/campus/calendar";
-import { dayKey, formatDay } from "@/lib/campus/time";
+import { currentMonth, monthRangeIso, parseMonth } from "@/lib/campus/calendar";
 import { whatsappLink } from "@/lib/whatsapp";
 import { canAccessCampus, countPendingOrders, getEntitlements, getStudentSessionsBetween, type SessionRow } from "@/server/campus";
 import { getDb } from "@/server/db";
@@ -69,8 +67,6 @@ export default async function MiHorario(props: PageProps<"/campus">) {
   const { year, month } = parseMonth(one(q.mes)) ?? currentMonth();
   const range = monthRangeIso(year, month);
   const sessions: SessionRow[] = await getStudentSessionsBetween(db, user.id, selected.program_slug, range.from, range.to);
-  const byDay = new Map<string, SessionRow[]>();
-  for (const x of sessions) byDay.set(dayKey(x.starts_at), [...(byDay.get(dayKey(x.starts_at)) ?? []), x]);
   const title = getProgram(selected.program_slug)?.title ?? selected.program_slug;
   const mesParam = one(q.mes) ? `&mes=${one(q.mes)}` : "";
 
@@ -89,51 +85,26 @@ export default async function MiHorario(props: PageProps<"/campus">) {
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_17rem]">
-        <MonthCalendar year={year} month={month} sessions={sessions} basePath="/campus" query={`cert=${selected.program_slug}`} editable={false} hideList />
+      {active.length > 1 && (
+        <nav aria-label="Mis certificaciones" className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <span className="text-muted">Ver clases de:</span>
+          {active.map((e) => {
+            const on = e.program_slug === selected.program_slug;
+            return (
+              <Link
+                key={e.enrollment_id}
+                href={`/campus?cert=${e.program_slug}${mesParam}`}
+                aria-current={on ? "true" : undefined}
+                className={`inline-flex min-h-12 items-center rounded-full border-2 px-5 font-medium no-underline ${on ? "border-clay-dark bg-clay-dark text-white" : "border-clay-dark text-clay-dark hover:bg-clay-soft"}`}
+              >
+                {getProgram(e.program_slug)?.title ?? e.program_slug}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
 
-        {active.length > 1 && (
-          <aside aria-labelledby="certs" className="order-first lg:order-last">
-            <h2 id="certs" className="mb-3 text-xl font-bold">Mis certificaciones</h2>
-            <p className="mb-3 text-muted">Elige cuál quieres ver en el calendario.</p>
-            <ul className="space-y-2">
-              {active.map((e) => {
-                const on = e.program_slug === selected.program_slug;
-                return (
-                  <li key={e.enrollment_id}>
-                    <Link
-                      href={`/campus?cert=${e.program_slug}${mesParam}`}
-                      aria-current={on ? "true" : undefined}
-                      className={`block rounded-2xl border-2 px-4 py-3 font-medium no-underline ${on ? "border-clay-dark bg-clay-dark text-white" : "border-clay-soft bg-white text-clay-dark hover:border-clay-dark"}`}
-                    >
-                      {getProgram(e.program_slug)?.title ?? e.program_slug}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </aside>
-        )}
-      </div>
-
-      <section aria-labelledby="detalle">
-        <h2 id="detalle" className="mb-4 text-2xl font-bold">Clases de {monthTitle(year, month).toLowerCase()}</h2>
-        {sessions.length === 0 ? (
-          <div className="rounded-3xl border border-clay-soft bg-white p-8 text-center">
-            <p className="text-xl">No hay clases programadas este mes en esta certificación.</p>
-            <p className="mt-2 text-muted">Cuando tus docentes definan sus horarios, aparecerán aquí.</p>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {[...byDay.entries()].map(([key, list]) => (
-              <div key={key}>
-                <h3 className="mb-3 text-xl font-bold">{formatDay(list[0].starts_at)}</h3>
-                <ul className="space-y-3">{list.map((x) => <SessionCard key={x.id} s={x} />)}</ul>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <MonthCalendar year={year} month={month} sessions={sessions} basePath="/campus" query={`cert=${selected.program_slug}`} editable={false} certTitle={title} />
     </div>
   );
 }

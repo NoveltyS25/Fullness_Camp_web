@@ -92,4 +92,4 @@ La administración marca el curso como terminado en la página de la cohorte (*M
 
 ## Panel de estudiante: horario mensual
 
-- *Mi horario* (`/campus`) muestra la misma cuadrícula mensual de las docentes, solo lectura, con las clases de **una** certificación a la vez (las de las certificaciones en que tiene inscripción activa). Si la estudiante tiene más de una, a la derecha aparece «Mis certificaciones» para cambiar; el mes y la certificación quedan en la dirección (`?cert=…&mes=…`). Debajo, el detalle del mes con docente, modalidad, lugar o enlace.
+- *Mi horario* (`/campus`) muestra la cuadrícula mensual a todo el ancho, con las clases de **una** certificación a la vez. Si la estudiante tiene más de una, arriba a la derecha aparecen botones para cambiar (el mes y la certificación quedan en la dirección: `?cert=…&mes=…`). Al tocar una clase se abre una ventana con fecha, docente, modalidad, lugar o enlace, descripción y contacto de la docente.

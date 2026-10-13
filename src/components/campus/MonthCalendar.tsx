@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { currentMonth, monthKey, monthTitle, monthWeeks, shiftMonth, todayKey } from "@/lib/campus/calendar";
 import { dayKey, formatDay, formatTime } from "@/lib/campus/time";
+import { SessionChip } from "@/components/campus/SessionChip";
 import type { SessionRow } from "@/server/campus";
+import { MODALITIES, type Modality } from "@/server/classes";
 
 const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
-/** Calendario mensual de las clases. Cada clase abre la pantalla para cambiar su horario. */
+/** Calendario mensual de las clases. Docentes: cada clase abre la pantalla para cambiar su horario. Estudiantes: abre una ventana con la información. */
 export function MonthCalendar({
   year,
   month,
@@ -13,7 +15,7 @@ export function MonthCalendar({
   basePath,
   query = "",
   editable = true,
-  hideList = false,
+  certTitle,
 }: {
   year: number;
   month: number;
@@ -23,8 +25,8 @@ export function MonthCalendar({
   query?: string;
   /** Docentes: cada clase abre la pantalla para cambiar su horario. Estudiantes: solo se ven. */
   editable?: boolean;
-  /** Oculta la lista por día de los celulares (cuando la página ya muestra el detalle debajo). */
-  hideList?: boolean;
+  /** Estudiantes: certificación que se muestra en la ventana de cada clase. */
+  certTitle?: string;
 }) {
   const hrefFor = (y: number, m: number) => `${basePath}?${query ? `${query}&` : ""}mes=${monthKey(y, m)}`;
   const todayHref = query ? `${basePath}?${query}` : basePath;
@@ -44,12 +46,11 @@ export function MonthCalendar({
       </>
     );
     const tone = s.status === "cancelled" ? "bg-red-50 text-red-900 line-through" : "bg-clay-soft text-clay-dark";
-    return editable ? (
+    if (!editable) return <SessionChip key={s.id} s={{ ...s }} modalityLabel={MODALITIES[s.modality as Modality] ?? s.modality} certTitle={certTitle} />;
+    return (
       <Link key={s.id} href={`/campus/profesor/sesion/${s.id}`} className={`block rounded-lg px-2 py-1 text-sm no-underline ${tone} ${s.status === "cancelled" ? "" : "hover:bg-clay hover:text-white"}`}>
         {inner}
       </Link>
-    ) : (
-      <span key={s.id} className={`block rounded-lg px-2 py-1 text-sm ${tone}`}>{inner}</span>
     );
   };
 
@@ -82,7 +83,7 @@ export function MonthCalendar({
       </div>
 
       {/* Celulares: lista por día */}
-      <div className={`space-y-4 sm:hidden ${hideList ? "hidden" : ""}`}>
+      <div className="space-y-4 sm:hidden">
         {[...byDay.entries()].length === 0 && <p className="rounded-3xl border border-clay-soft bg-white p-6 text-lg">No hay clases este mes.</p>}
         {[...byDay.entries()].map(([key, list]) => (
           <div key={key}>

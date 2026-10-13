@@ -56,10 +56,14 @@ export interface SessionRow {
   class_title: string;
   modality: string;
   teacher_name: string | null;
+  description: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
 }
 
-const SESSION_SELECT = `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name
-  FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id`;
+const SESSION_SELECT = `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name,
+  c.description, tp.contact_email, tp.contact_phone
+  FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id LEFT JOIN teacher_profiles tp ON tp.user_id = c.teacher_id`;
 
 /** Clases de las certificaciones en las que la estudiante tiene una inscripción activa (sin terminar). */
 const STUDENT_CLASSES = `SELECT mc.class_id FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id
@@ -138,7 +142,7 @@ export interface EditableSession extends SessionRow {
 
 /** Solo la docente de la clase o la administración pueden ver una sesión para cambiarla. */
 export async function getSessionForActor(db: Db, actor: Pick<User, "id" | "role">, sessionId: string): Promise<EditableSession | undefined> {
-  const row = await db.get<EditableSession>(`SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name, c.teacher_id
+  const row = await db.get<EditableSession>(`SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name, c.teacher_id, c.description, NULL AS contact_email, NULL AS contact_phone
      FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id WHERE s.id = ?`, [sessionId]);
   if (!row) return undefined;
   return actor.role === "admin" || row.teacher_id === actor.id ? row : undefined;
