@@ -512,3 +512,28 @@ test("crear una clase: todos los campos son obligatorios, según la modalidad", 
   assert.ok((await createClassWithSessions(db, t1, { ...newClass, modality: "presencial", location: "Sede Bogotá", onlineUrl: "" })).ok);
   assert.ok((await createClassWithSessions(db, t1, { ...newClass, modality: "mixta", location: "Sede Bogotá" })).ok);
 });
+
+// ---------------------------------------------------------------- calendario de la estudiante por certificación
+
+import { getStudentSessionsBetween } from "./campus.ts";
+
+test("el horario mensual de la estudiante muestra solo la certificación elegida y exige inscripción activa", async () => {
+  const { db, admin, t1, stu } = await classesSetup();
+  const a = await createClass(db, t1, { title: "Anatomía", modality: "virtual", description: "" });
+  const b = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
+  await addModule(db, admin, PILATES, "Módulo 1");
+  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, a.ok ? a.id : "");
+  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, b.ok ? b.id : "");
+  await placeClass(db, admin, (await getPensum(db, PILATES))[0].id, b.ok ? b.id : ""); // Marketing está en las dos
+  for (const c of [a, b]) await addClassSessions(db, t1, { classId: c.ok ? c.id : "", title: "", ...FUTURE, weeks: 1, location: null, onlineUrl: null });
+  const range = ["2099-03-01T05:00:00.000Z", "2099-04-01T05:00:00.000Z"] as const;
+
+  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).length, 0, "sin inscripción no ve nada");
+  const hathaEnrollment = await enroll(db, stu.id, HATHA);
+  await enroll(db, stu.id, PILATES);
+  assert.deepEqual((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).map((s) => s.class_title).sort(), ["Anatomía", "Marketing"]);
+  assert.deepEqual((await getStudentSessionsBetween(db, stu.id, PILATES, ...range)).map((s) => s.class_title), ["Marketing"]);
+  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, "2099-05-01T05:00:00.000Z", "2099-06-01T05:00:00.000Z")).length, 0, "otro mes");
+  await setCourseCompleted(db, admin, hathaEnrollment, true);
+  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).length, 0, "curso terminado: ya no tiene clases");
+});

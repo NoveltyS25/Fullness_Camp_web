@@ -89,3 +89,7 @@ La administración marca el curso como terminado en la página de la cohorte (*M
 - Recibe el enlace para crear su contraseña y entra a **/campus/bienvenida-docente**: nombre, cédula, correo y celular de contacto para estudiantes. Después agrega sus clases y horarios. Si ya hay una cuenta con esa cédula (por ejemplo, de estudiante), la administración une las cuentas.
 - Si el enlace vence, «Olvidé mi contraseña» acepta el correo con la cédula vacía mientras el registro está pendiente.
 - `node scripts/create-staff.ts --role admin --cedula … --name … --email …` también sube de rol una cuenta que ya existe y conserva sus inscripciones.
+
+## Panel de estudiante: horario mensual
+
+- *Mi horario* (`/campus`) muestra la misma cuadrícula mensual de las docentes, solo lectura, con las clases de **una** certificación a la vez (las de las certificaciones en que tiene inscripción activa). Si la estudiante tiene más de una, a la derecha aparece «Mis certificaciones» para cambiar; el mes y la certificación quedan en la dirección (`?cert=…&mes=…`). Debajo, el detalle del mes con docente, modalidad, lugar o enlace.

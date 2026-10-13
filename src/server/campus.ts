@@ -111,6 +111,18 @@ export async function updateProfile(
 
 // ------------------------------------------------------------------ profesoras
 
+/** Sesiones de las clases de UNA certificación en un rango (calendario de la estudiante). Exige inscripción activa y sin terminar. */
+export function getStudentSessionsBetween(db: Db, userId: string, programSlug: string, fromIso: string, toIso: string): Promise<SessionRow[]> {
+  return db.all<SessionRow>(
+    `${SESSION_SELECT}
+     WHERE s.starts_at >= ? AND s.starts_at < ?
+       AND EXISTS (SELECT 1 FROM enrollments e WHERE e.user_id = ? AND e.program_slug = ? AND e.status = 'active' AND e.completed_at IS NULL)
+       AND s.class_id IN (SELECT mc.class_id FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id WHERE m.program_slug = ?)
+     ORDER BY s.starts_at`,
+    [fromIso, toIso, userId, programSlug, programSlug],
+  );
+}
+
 /** Sesiones de las clases que dicta esta persona, entre dos instantes (para el calendario mensual). */
 export function getTeacherSessionsBetween(db: Db, teacherId: string, fromIso: string, toIso: string): Promise<SessionRow[]> {
   return db.all<SessionRow>(`${SESSION_SELECT} WHERE c.teacher_id = ? AND s.starts_at >= ? AND s.starts_at < ? ORDER BY s.starts_at`, [teacherId, fromIso, toIso]);
