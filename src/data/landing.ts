@@ -16,7 +16,7 @@ export interface Testimonial {
   author: string;
 }
 
-export type FactIcon = "clock" | "laptop" | "pin" | "calendar" | "award" | "users" | "gift" | "mountain";
+export type FactIcon = "clock" | "laptop" | "pin" | "calendar" | "award" | "users" | "gift" | "mountain" | "leaf" | "heart" | "sparkles" | "book" | "cross";
 
 export interface Fact {
   icon: FactIcon;
@@ -89,7 +89,7 @@ export const TEAM = {
 
 // ------------------------------------------------------------------ reseñas reales de Google (página «Nosotros»)
 
-const RESENAS = {
+export const RESENAS = {
   adriana: {
     quote: "Estoy haciendo mi formación en yoga y pilates con Fullness y ha sido la experiencia más bonita que he tenido en mi camino de autodescubrimiento. Lila es una persona bellísima, sabia y con muchas ganas de compartir todos sus conocimientos.",
     author: "Adriana Buzon · reseña en Google",
@@ -103,6 +103,9 @@ const RESENAS = {
     author: "Luz Arango · reseña en Google",
   },
 } satisfies Record<string, Testimonial>;
+
+/** Reseñas reales de Google guardadas (respaldo para el inicio cuando no hay clave de Google Places). */
+export const SITE_TESTIMONIALS: Testimonial[] = [RESENAS.camila, RESENAS.adriana, RESENAS.luz];
 
 // ------------------------------------------------------------------ preguntas comunes
 

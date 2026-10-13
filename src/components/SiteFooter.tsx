@@ -4,7 +4,7 @@ import { WHATSAPP_GENERAL } from "@/lib/whatsapp";
 
 export function SiteFooter() {
   return (
-    <footer className="mt-24 bg-clay-dark text-white">
+    <footer className="bg-clay-dark text-white">
       <div className="mx-auto grid max-w-6xl gap-10 px-5 py-14 md:grid-cols-3">
         <div className="space-y-4">
           <Image src="/brand/logo.png" alt="Fullness Camp" width={88} height={83} />

@@ -11,6 +11,7 @@ import { LeadForm } from "./LeadForm";
 import { MagazineViewer } from "./MagazineViewer";
 import { FactGlyph } from "./FactGlyph";
 import { StickyCta } from "./StickyCta";
+import { Reviews } from "@/components/Reviews";
 import { TrackEvent } from "./TrackEvent";
 
 const Check = () => (
@@ -34,16 +35,6 @@ const H2 = ({ id, children, center = false, sub }: { id: string; children: React
     <h2 id={`${id}-t`} className="text-3xl font-bold sm:text-4xl">{children}</h2>
     {sub && <p className="mt-3 text-lg text-muted">{sub}</p>}
   </div>
-);
-
-const Stars = ({ n }: { n: number }) => (
-  <span className="inline-flex gap-0.5 text-clay-dark" role="img" aria-label={`${n} de 5 estrellas`}>
-    {Array.from({ length: 5 }, (_, i) => (
-      <svg key={i} viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" className={i < Math.round(n) ? "fill-current" : "fill-clay-soft"}>
-        <path d="m12 2.8 2.8 5.9 6.4.9-4.6 4.5 1.1 6.4L12 17.4l-5.7 3.1 1.1-6.4L2.8 9.6l6.4-.9L12 2.8Z" />
-      </svg>
-    ))}
-  </span>
 );
 
 export function ProgramLanding({ program, landing, magazine, googleReviews }: { program: Program; landing: Landing; magazine: MagazineManifest | null; googleReviews: GoogleReviewsData | null }) {
@@ -160,58 +151,14 @@ export function ProgramLanding({ program, landing, magazine, googleReviews }: { 
       </Section>
 
       {/* 5. Prueba social real */}
-      {(googleReviews || (landing.testimonials && landing.testimonials.length > 0)) && (
-        <Section id="opiniones" tone="white" label="opiniones">
-          <H2 id="opiniones" center sub={googleReviews ? undefined : "Opiniones reales de nuestra comunidad en Google."}>
-            Lo que dicen quienes ya estudiaron con nosotras
-          </H2>
-
-          {googleReviews ? (
-            <>
-              {googleReviews.rating && (
-                <p className="mb-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-lg">
-                  <Stars n={googleReviews.rating} />
-                  <span className="text-2xl font-bold text-clay-dark">{googleReviews.rating.toLocaleString("es-CO", { minimumFractionDigits: 1 })}</span>
-                  <span className="text-muted">· {googleReviews.total.toLocaleString("es-CO")} reseñas en Google Maps</span>
-                </p>
-              )}
-              <div className="grid gap-6 md:grid-cols-2">
-                {googleReviews.reviews.map((r) => (
-                  <figure key={`${r.sede}-${r.author}`} className="flex flex-col rounded-3xl border border-clay-soft bg-sand p-7">
-                    <Stars n={r.rating} />
-                    <blockquote className="mt-3 flex-1 text-xl leading-relaxed">«{r.text}»</blockquote>
-                    <figcaption className="mt-4 font-medium text-clay-dark">
-                      {r.authorUrl ? <a href={r.authorUrl} target="_blank" rel="noopener noreferrer nofollow" className="underline">{r.author}</a> : r.author}
-                      <span className="font-normal text-muted"> · Sede {r.sede} · Reseña en Google</span>
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
-              <p className="mt-8 flex flex-wrap items-center justify-center gap-3 text-center">
-                {googleReviews.places.filter((p) => p.mapsUrl).map((p) => (
-                  <a key={p.sede} href={p.mapsUrl!} target="_blank" rel="noopener noreferrer" className="btn btn-secondary !min-h-12">Ver reseñas de la sede {p.sede}</a>
-                ))}
-              </p>
-            </>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2">
-              {landing.testimonials?.map((t) => (
-                <figure key={t.author} className="rounded-3xl border border-clay-soft bg-sand p-7">
-                  <blockquote className="text-xl leading-relaxed">«{t.quote}»</blockquote>
-                  <figcaption className="mt-4 font-medium text-clay-dark">{t.author}</figcaption>
-                </figure>
-              ))}
-            </div>
-          )}
-        </Section>
-      )}
+      <Reviews googleReviews={googleReviews} fallback={landing.testimonials} />
 
       {/* 6. Qué vas a aprender: preguntas que se abren */}
       <Section id="temario" label="temario">
         <H2 id="temario" center sub="Toca una pregunta para ver el detalle.">Qué vas a aprender</H2>
         <div className="mx-auto max-w-3xl space-y-3">
           {landing.curriculum.map((block, i) => (
-            <details key={block.title} open={i === 0} className="group rounded-2xl border border-clay-soft bg-white p-5">
+            <details key={block.title} name="aprender" open={i === 0} className="group rounded-2xl border border-clay-soft bg-white p-5">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-lg font-bold text-clay-dark sm:text-xl [&::-webkit-details-marker]:hidden">
                 {block.question ?? block.title}
                 <span aria-hidden="true" className="text-2xl transition group-open:rotate-45">+</span>
@@ -327,7 +274,7 @@ export function ProgramLanding({ program, landing, magazine, googleReviews }: { 
         <H2 id="preguntas" center sub="Lo que más nos preguntan antes de inscribirse.">Preguntas frecuentes</H2>
         <div className="mx-auto max-w-3xl space-y-3">
           {landing.faq.map((f) => (
-            <details key={f.q} className="group rounded-2xl border border-clay-soft bg-white p-5">
+            <details key={f.q} name="preguntas" className="group rounded-2xl border border-clay-soft bg-white p-5">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-lg font-bold text-clay-dark [&::-webkit-details-marker]:hidden">
                 {f.q}
                 <span aria-hidden="true" className="text-2xl transition group-open:rotate-45">+</span>

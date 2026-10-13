@@ -51,7 +51,7 @@ export default function Contacto() {
       <h2 className="mb-6 text-2xl font-bold">Preguntas frecuentes</h2>
       <div className="space-y-3">
         {faqs.map((f) => (
-          <details key={f.q} className="group rounded-2xl border border-clay-soft bg-white p-5">
+          <details key={f.q} name="contacto-preguntas" className="group rounded-2xl border border-clay-soft bg-white p-5">
             <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 text-lg font-bold text-clay-dark [&::-webkit-details-marker]:hidden">
               {f.q}
               <span aria-hidden="true" className="text-2xl transition group-open:rotate-45">+</span>

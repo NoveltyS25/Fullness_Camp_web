@@ -43,3 +43,4 @@ _wp-backup
 
 # Datos locales (SQLite)
 /data/
+_fotos-origen
