@@ -65,19 +65,27 @@ puede llamar a `GET /api/notificaciones/procesar` con `Authorization: Bearer <CR
 - Se probó además de punta a punta en un navegador real (24 comprobaciones): compra, correo, primer ingreso, cambio de
   contraseña, acceso según pago, bloqueo por intentos, cambio de horario por una profesora y aviso a estudiantes.
 
-## Plan de estudios (pensum), docentes y certificados
+## Modelo del campus: clases de las docentes, certificaciones de la administración
 
-- **Módulos y temas por certificación** (`curriculum_modules`, `curriculum_topics`). El de Hatha Vinyasa 300 h se siembra una vez desde `src/data/pensum-seed.ts` (sale del PDF; no trae docentes ni horas). Para sembrar otra certificación, se agrega en ese archivo.
-- **Docentes** (`topic_teachers`): cada docente se asigna sus temas con modalidad (presencial, virtual o mixta), número de clases y horario en texto libre. Puede agregar temas, quitar los suyos y editar su asignación. La administración ve y asigna todo. Rutas: `/campus/profesor/temas` y `/campus/profesor/temas/[slug]`.
-- **Perfil de docente** (`teacher_profiles`): especialidad, bio, correo y WhatsApp de contacto y foto (por enlace; la subida de archivos está pendiente). Se llena en *Mi perfil*.
-- **Estudiantes**: `/campus/cursos` (cursos activos y terminados) y `/campus/cursos/[slug]` (plan de estudios con docentes y su contacto). Solo con inscripción activa.
-- **Curso terminado y certificado**: la administración lo marca en la página de la cohorte (*Marcar curso terminado*). Genera el código `FC-XXXXXXXX` y el certificado imprimible en `/campus/certificado/[id]`. Las terminadas dejan de recibir avisos de horario.
-- **Tesina** (obligatoria, se presenta a Lila) y **retiros** (fuera del valor del programa; precio especial a estudiantes activas) se muestran como avisos en el plan, no como temas.
+- **Clase** (`classes`): lo que dicta una docente («Marketing», «Biomecánica»…). La docente la crea en *Mis clases* y define sus **horarios** (`sessions`, con repetición semanal); puede cambiarlos y se avisa a las estudiantes (campus + correo + WhatsApp).
+- **Certificación** (`curriculum_modules` → `module_classes`): la arma la administración en *Certificaciones*: módulos y, dentro de cada módulo, las clases. **Una misma clase puede estar en varias certificaciones**: sus estudiantes son las de todas ellas, y la docente ve a cada una con su certificación al lado (*Mis estudiantes*).
+- Las certificaciones salen hoy del catálogo (`src/data/programs.ts`). Crear una certificación nueva desde el panel necesita el editor de programas y precios (pendiente). El pensum inicial de Hatha viene de `src/data/pensum-seed.ts`.
+- Las **cohortes** son solo grupos de estudiantes (sede, fecha de inicio): ya no tienen docente ni clases propias.
 
-## Docentes: ingreso, primer registro y doble panel
+## Tres paneles con la misma cédula
+
+- **Administración** (rol administradora): panel, certificaciones, clases y docentes, interesadas, quejas.
+- **Docente** (docentes y administradoras): calendario mensual de sus clases (cambia horarios), sus clases, sus estudiantes.
+- **Estudiante** (quien tenga inscripción propia): horario, mis cursos activos y terminados (con certificado), plan de estudios con docentes y contacto.
+- Una barra «Ver como» permite pasar de un panel a otro; la elección se recuerda en una cookie. Lila, por ejemplo, puede ser administradora (rol) y ver su panel de docente aparte.
+
+## Curso terminado y certificado
+
+La administración marca el curso como terminado en la página de la cohorte (*Marcar curso terminado*): genera el código `FC-XXXXXXXX` y el certificado imprimible en `/campus/certificado/[id]`. Las terminadas dejan de recibir avisos de horario. La tesina (obligatoria, se presenta a Lila) y los retiros (fuera del valor del programa; precio especial a estudiantes activas) se muestran como avisos en el plan.
+
+## Docentes: ingreso y primer registro
 
 - Todas las personas ingresan con **cédula + contraseña**. Una docente nueva se crea solo con nombre y correo (admin → *Crear la cuenta de una profesora*, o `node scripts/create-staff.ts --role teacher --name "…" --email …`). Hasta que escribe su cédula lleva un código provisional `PEND-…` que no sirve para ingresar.
-- Recibe el enlace para crear su contraseña y entra directo a **/campus/bienvenida-docente**: nombre, cédula (con la que ingresará desde entonces), correo y celular de contacto para estudiantes y las certificaciones en las que es docente. Si ya hay una cuenta con esa cédula (por ejemplo, de estudiante), la administración une las cuentas.
+- Recibe el enlace para crear su contraseña y entra a **/campus/bienvenida-docente**: nombre, cédula, correo y celular de contacto para estudiantes. Después agrega sus clases y horarios. Si ya hay una cuenta con esa cédula (por ejemplo, de estudiante), la administración une las cuentas.
 - Si el enlace vence, «Olvidé mi contraseña» acepta el correo con la cédula vacía mientras el registro está pendiente.
-- Una docente con inscripción propia ve el botón **Ir a mi panel de estudiante** (y **Volver a mi panel de docente**). Es la misma cuenta y cédula; la vista se recuerda en una cookie.
-- `node scripts/create-staff.ts --role admin --cedula … --name … --email …` también sube de rol una cuenta que ya existe (por ejemplo, una compra de prueba) y conserva sus inscripciones.
+- `node scripts/create-staff.ts --role admin --cedula … --name … --email …` también sube de rol una cuenta que ya existe y conserva sus inscripciones.

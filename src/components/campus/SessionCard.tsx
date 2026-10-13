@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatRange } from "@/lib/campus/time";
+import { MODALITIES, type Modality } from "@/server/classes";
 import type { SessionRow } from "@/server/campus";
 
 export function SessionCard({ s, editHref }: { s: SessionRow; editHref?: string }) {
@@ -12,7 +13,7 @@ export function SessionCard({ s, editHref }: { s: SessionRow; editHref?: string 
       </div>
       <p className="mt-1 text-lg font-medium">{formatRange(s.starts_at, s.ends_at)}</p>
       <p className="text-muted">
-        {s.cohort_name} · {s.sede}
+        {s.teacher_name ?? "Docente por asignar"} · {MODALITIES[s.modality as Modality] ?? s.modality}
         {s.location ? ` · ${s.location}` : ""}
       </p>
       {s.online_url && !cancelled && (

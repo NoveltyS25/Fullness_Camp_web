@@ -32,11 +32,13 @@ class SqliteDb implements Db {
     this.raw.exec("PRAGMA busy_timeout = 5000");
     // WAL: quien lee no bloquea a quien escribe.
     if (path !== ":memory:") this.raw.exec("PRAGMA journal_mode = WAL");
+    this.dropOldSessions(); // antes del esquema: el índice nuevo necesita la columna class_id
     this.raw.exec(SCHEMA);
     this.addColumnIfMissing("orders", "attribution", "TEXT");
     // Curso terminado: la administración lo marca cuando la estudiante cumple todo (incluida la tesina presentada a Lila).
     this.addColumnIfMissing("enrollments", "completed_at", "TEXT");
     this.addColumnIfMissing("enrollments", "certificate_code", "TEXT");
+    this.migrateToClasses();
     // Dentro de una transacción, "transaction" anidada solo ejecuta la función.
     this.txView = {
       all: (s, p) => this.all(s, p),
@@ -44,6 +46,49 @@ class SqliteDb implements Db {
       run: (s, p) => this.run(s, p),
       transaction: (fn) => fn(this.txView),
     };
+  }
+
+  /** Sesiones por cohorte (modelo anterior): se descartan junto con sus avisos; eran datos de demostración. */
+  private dropOldSessions() {
+    const cols = this.raw.prepare("PRAGMA table_info(sessions)").all() as { name: string }[];
+    if (cols.length > 0 && !cols.some((c) => c.name === "class_id")) {
+      this.raw.exec("PRAGMA foreign_keys = OFF");
+      this.raw.exec("DROP TABLE IF EXISTS deliveries; DROP TABLE IF EXISTS notifications; DROP TABLE IF EXISTS session_changes; DROP TABLE IF EXISTS sessions;");
+      this.raw.exec("PRAGMA foreign_keys = ON");
+    }
+  }
+
+  private hasTable(name: string): boolean {
+    return !!this.raw.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+  }
+
+  /**
+   * Bases creadas antes de que las clases fueran propias de cada docente:
+   *  - los temas del pensum pasan a ser clases (con su docente si ya tenían una) colocadas en su módulo;
+   *  - las sesiones por cohorte se descartan antes (ver dropOldSessions).
+   */
+  private migrateToClasses() {
+    if (this.hasTable("curriculum_topics")) {
+      type Topic = { id: string; module_id: string; position: number; title: string; teacher_id: string | null; modality: string | null };
+      const topics = this.raw
+        .prepare(
+          `SELECT t.id, t.module_id, t.position, t.title,
+                  (SELECT tt.user_id FROM topic_teachers tt WHERE tt.topic_id = t.id ORDER BY tt.updated_at LIMIT 1) AS teacher_id,
+                  (SELECT tt.modality FROM topic_teachers tt WHERE tt.topic_id = t.id ORDER BY tt.updated_at LIMIT 1) AS modality
+           FROM curriculum_topics t ORDER BY t.module_id, t.position`,
+        )
+        .all() as Topic[];
+      const now = new Date().toISOString();
+      this.raw.exec("BEGIN");
+      for (const t of topics) {
+        const classId = crypto.randomUUID();
+        this.raw.prepare("INSERT INTO classes (id, title, teacher_id, modality, created_at) VALUES (?, ?, ?, ?, ?)").run(classId, t.title, t.teacher_id, t.modality ?? "virtual", now);
+        this.raw.prepare("INSERT INTO module_classes (id, module_id, class_id, position) VALUES (?, ?, ?, ?)").run(crypto.randomUUID(), t.module_id, classId, t.position);
+      }
+      this.raw.exec("DROP TABLE IF EXISTS topic_teachers; DROP TABLE IF EXISTS curriculum_topics; DROP TABLE IF EXISTS teacher_programs;");
+      this.raw.exec("COMMIT");
+    }
+    if (this.hasTable("teacher_programs")) this.raw.exec("DROP TABLE teacher_programs");
   }
 
   /** Migración mínima: agrega una columna nueva a una tabla que ya existía en una base creada antes. */

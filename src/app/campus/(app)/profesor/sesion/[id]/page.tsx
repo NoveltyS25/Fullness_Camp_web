@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { RescheduleForm } from "@/components/campus/RescheduleForm";
 import { formatDay, formatRange, toLocalInput } from "@/lib/campus/time";
-import { countActiveEnrollees, getSessionForActor } from "@/server/campus";
+import { countClassStudents, getSessionForActor } from "@/server/campus";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
 
@@ -16,14 +16,14 @@ export default async function CambiarHorario(props: PageProps<"/campus/profesor/
   const db = getDb();
   const s = await getSessionForActor(db, user, id);
   if (!s) notFound();
-  const count = await countActiveEnrollees(db, s.cohort_id);
+  const count = await countClassStudents(db, s.class_id);
 
   return (
     <div className="max-w-2xl">
       <p className="mb-4"><Link href="/campus/profesor" className="underline">← Volver a mis clases</Link></p>
       <h1 className="mb-2 text-3xl font-bold">Cambiar horario</h1>
       <p className="mb-1 text-xl font-medium">{s.title}</p>
-      <p className="mb-8 text-muted">Ahora: {formatDay(s.starts_at)}, {formatRange(s.starts_at, s.ends_at)} · {s.cohort_name} ({s.sede})</p>
+      <p className="mb-8 text-muted">Ahora: {formatDay(s.starts_at)}, {formatRange(s.starts_at, s.ends_at)} · {s.class_title}</p>
 
       <RescheduleForm
         sessionId={s.id}

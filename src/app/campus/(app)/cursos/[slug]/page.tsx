@@ -2,8 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getProgram } from "@/data/programs";
+import { formatDay, formatRange } from "@/lib/campus/time";
 import { getEntitlements } from "@/server/campus";
-import { getPensum, getProgramTeachers, MODALITIES } from "@/server/curriculum";
+import { getPensum, getProgramTeachers, MODALITIES } from "@/server/classes";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
 
@@ -24,14 +25,14 @@ export default async function PlanDeEstudios(props: PageProps<"/campus/cursos/[s
   }
 
   const [modules, teachers] = await Promise.all([getPensum(db, slug), getProgramTeachers(db, slug)]);
-  const staff = user.role !== "student";
+  const isAdmin = user.role === "admin";
 
   return (
     <div className="space-y-12">
       <div>
-        <p className="mb-4"><Link href={staff ? `/campus/profesor/temas/${slug}` : "/campus/cursos"} className="underline">{staff ? "← Editar temas" : "← Mis cursos"}</Link></p>
+        <p className="mb-4"><Link href={isAdmin ? `/campus/admin/certificaciones/${slug}` : "/campus/cursos"} className="underline">{isAdmin ? "← Editar esta certificación" : "← Mis cursos"}</Link></p>
         <h1 className="mb-2 text-3xl font-bold sm:text-4xl">{program.title}</h1>
-        <p className="text-lg text-muted">Plan de estudios: módulos y temas, con el docente, la modalidad y el horario de cada uno.</p>
+        <p className="text-lg text-muted">Plan de estudios: módulos y clases, con la docente, la modalidad y el próximo horario de cada una.</p>
       </div>
 
       {modules.length === 0 ? (
@@ -41,24 +42,28 @@ export default async function PlanDeEstudios(props: PageProps<"/campus/cursos/[s
           {modules.map((m, mi) => (
             <section key={m.id} aria-labelledby={`m-${m.id}`} className="rounded-3xl border border-clay-soft bg-white p-5 sm:p-6">
               <h2 id={`m-${m.id}`} className="mb-4 text-2xl font-bold text-clay-dark">Módulo {mi + 1}. {m.title}</h2>
-              <ul className="divide-y divide-clay-soft">
-                {m.topics.map((t) => (
-                  <li key={t.id} className="py-3">
-                    <p className="text-lg font-medium">{t.title}</p>
-                    {t.teachers.length === 0 ? (
-                      <p className="text-muted">Docente por asignar</p>
-                    ) : (
-                      t.teachers.map((x) => (
-                        <p key={x.user_id} className="text-muted">
-                          {x.full_name} · {MODALITIES[x.modality]}
-                          {x.classes_count ? ` · ${x.classes_count} ${x.classes_count === 1 ? "clase" : "clases"}` : ""}
-                          {x.schedule_note ? ` · ${x.schedule_note}` : ""}
+              {m.classes.length === 0 ? (
+                <p className="text-muted">Aún no hay clases en este módulo.</p>
+              ) : (
+                <ul className="divide-y divide-clay-soft">
+                  {m.classes.map((c) => (
+                    <li key={c.placement_id} className="py-3">
+                      <p className="text-lg font-medium">{c.title}</p>
+                      <p className="text-muted">
+                        {c.teacher_name ?? "Docente por asignar"} · {MODALITIES[c.modality]}
+                      </p>
+                      {c.next_start && c.next_end ? (
+                        <p className="text-muted">
+                          Próxima clase: {formatDay(c.next_start)}, {formatRange(c.next_start, c.next_end)}
+                          {c.upcoming_count > 1 ? ` · ${c.upcoming_count} clases programadas` : ""}
                         </p>
-                      ))
-                    )}
-                  </li>
-                ))}
-              </ul>
+                      ) : (
+                        <p className="text-muted">Horario por definir</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           ))}
         </div>
@@ -79,7 +84,7 @@ export default async function PlanDeEstudios(props: PageProps<"/campus/cursos/[s
       <section aria-labelledby="docentes">
         <h2 id="docentes" className="mb-4 text-2xl font-bold">Docentes de esta certificación</h2>
         {teachers.length === 0 ? (
-          <p className="rounded-3xl border border-clay-soft bg-white p-6 text-lg">Las docentes aparecerán aquí cuando se asignen a los temas.</p>
+          <p className="rounded-3xl border border-clay-soft bg-white p-6 text-lg">Las docentes aparecerán aquí cuando se asignen a las clases.</p>
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2">
             {teachers.map((t) => (
@@ -92,7 +97,7 @@ export default async function PlanDeEstudios(props: PageProps<"/campus/cursos/[s
                   </div>
                 </div>
                 {t.bio && <p className="mt-3">{t.bio}</p>}
-                {t.topics.length > 0 && <p className="mt-3 text-sm text-muted">Dicta: {t.topics.join(" · ")}</p>}
+                <p className="mt-3 text-sm text-muted">Dicta: {t.classes.join(" · ")}</p>
                 {(t.contact_email || t.contact_phone) ? (
                   <p className="mt-3 text-lg">
                     {t.contact_email && <a href={`mailto:${t.contact_email}`} className="block break-all font-medium text-clay-dark underline">{t.contact_email}</a>}

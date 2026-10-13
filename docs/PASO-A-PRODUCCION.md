@@ -66,7 +66,8 @@ El correo de Paula Salazar sirve para pruebas y también es docente real.
 - [ ] Perfil de la docente en el campus: **foto** (subir imagen; hoy solo acepta un enlace) y nombre/cargo.
 - [ ] Sección «Clases grabadas» por docente: pegan enlaces (por ahora de Google Meet) y se abren en **una ventana nueva** sin salir del campus.
 - [ ] Paso a paso de primer ingreso para la docente: 1) crear contraseña, 2) subir foto, 3) registrar clases y horarios por certificación, 4) agregar enlaces de grabaciones.
-- [ ] Desarrollo pendiente en el campus (se hace antes de producción): subida de foto de perfil, enlaces de grabaciones por clase y asignación de clases a una certificación por la propia docente.
+- [ ] Desarrollo pendiente en el campus (se hace antes de producción): subida de foto de perfil y enlaces de grabaciones por clase. Las docentes crean sus clases y horarios; la administración arma las certificaciones.
+- [ ] Editor para **crear certificaciones nuevas** desde el panel (hoy salen del catálogo de programas).
 
 ## 6. Medición y buscadores
 

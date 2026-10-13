@@ -8,13 +8,13 @@ import { fromLocalInput } from "@/lib/campus/time";
 import { consumePasswordReset, createPasswordReset, createSession, login, peekPasswordReset } from "@/server/auth";
 import { markAllRead, processPendingDeliveries, rescheduleSession, updateProfile } from "@/server/campus";
 import { cookies } from "next/headers";
-import { getTeacherProfile, saveTeacherProfile, setTeacherPrograms } from "@/server/curriculum";
+import { getTeacherProfile, saveTeacherProfile } from "@/server/curriculum";
 import { getDb } from "@/server/db";
 import { sendEmail } from "@/server/outbox";
 import { hashToken, normalizeCedula, validateNewPassword, verifyPassword } from "@/server/security";
 import { passwordResetEmail } from "@/server/templates";
 import { findUserByCedula, getPasswordHash, isPendingCedula, PENDING_PREFIX, setPassword } from "@/server/users";
-import { baseUrl, clientIp, currentSessionToken, endSession, getCurrentUser, startSession } from "@/server/web";
+import { baseUrl, clientIp, currentSessionToken, endSession, getCurrentUser, getViews, startSession, VIEW_HOME, type View } from "@/server/web";
 
 export interface FormState {
   error?: string;
@@ -143,7 +143,6 @@ export async function saveTeacherProfileAction(_prev: FormState, fd: FormData): 
   if (photo && !photo.startsWith("https://")) return { error: "El enlace de la foto debe empezar por https://" };
 
   const db = getDb();
-  if (fd.has("programs_present")) await setTeacherPrograms(db, user.id, fd.getAll("programs").map(String));
   await saveTeacherProfile(db, user.id, {
     headline: text(fd, "headline").trim().slice(0, 140) || null,
     bio: text(fd, "bio").trim().slice(0, 1200) || null,
@@ -155,7 +154,7 @@ export async function saveTeacherProfileAction(_prev: FormState, fd: FormData): 
   return { message: "Tu perfil de docente quedó guardado." };
 }
 
-/** Primer ingreso de una docente: nombre, cédula (con la que ingresará desde ahora), contacto para estudiantes y certificaciones. */
+/** Primer ingreso de una docente: nombre, cédula (con la que ingresará desde ahora) y contacto para estudiantes. */
 export async function completeTeacherOnboardingAction(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await getCurrentUser();
   if (!user) redirect("/campus/ingresar");
@@ -165,13 +164,11 @@ export async function completeTeacherOnboardingAction(_prev: FormState, fd: Form
   const cedula = normalizeCedula(text(fd, "cedula"));
   const email = text(fd, "contact_email").trim().toLowerCase();
   const phone = normalizeWhatsapp(text(fd, "contact_phone").trim());
-  const programs = fd.getAll("programs").map(String);
 
   if (fullName.length < 3) return { error: "Escribe tu nombre completo." };
   if (!cedula) return { error: "Escribe tu número de cédula (solo números). Con él ingresarás al campus." };
   if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido para que tus estudiantes te contacten." };
   if (!phone) return { error: "Escribe un número de celular válido para el WhatsApp de tus estudiantes. Ejemplo: 311 674 1900" };
-  if (programs.length === 0) return { error: "Elige al menos una certificación en la que eres docente." };
 
   const db = getDb();
   const taken = await findUserByCedula(db, cedula);
@@ -179,24 +176,20 @@ export async function completeTeacherOnboardingAction(_prev: FormState, fd: Form
     return { error: "Esa cédula ya tiene una cuenta (por ejemplo, como estudiante). Escríbele a la administración: ella une tu cuenta de estudiante con el rol de docente." };
   }
   await db.run("UPDATE users SET full_name = ?, cedula = ?, whatsapp_phone = ? WHERE id = ?", [fullName, cedula, phone, user.id]);
-  await setTeacherPrograms(db, user.id, programs);
   const prev = await getTeacherProfile(db, user.id);
   await saveTeacherProfile(db, user.id, { headline: prev?.headline ?? null, bio: prev?.bio ?? null, photo_url: prev?.photo_url ?? null, contact_email: email, contact_phone: phone });
   revalidatePath("/campus", "layout");
-  redirect("/campus/profesor/temas?bienvenida=1");
+  redirect("/campus/profesor?bienvenida=1");
 }
 
-/** Docentes con inscripción propia: alternan entre su panel de docente y su panel de estudiante (misma cédula). */
+/** Cambia entre los paneles a los que la persona tiene derecho (administración, docente, estudiante) con la misma cédula. */
 export async function switchViewAction(fd: FormData) {
-  const user = await getCurrentUser();
-  if (!user) redirect("/campus/ingresar");
-  const store = await cookies();
-  if (user.role !== "student" && text(fd, "view") === "student") {
-    store.set("fc_view", "student", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 30 * 24 * 3600 });
-  } else {
-    store.delete("fc_view");
-  }
-  redirect("/campus");
+  const views = await getViews();
+  if (!views) redirect("/campus/ingresar");
+  const wanted = text(fd, "view") as View;
+  if (!views.available.includes(wanted)) redirect(VIEW_HOME[views.current]);
+  (await cookies()).set("fc_view", wanted, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 30 * 24 * 3600 });
+  redirect(VIEW_HOME[wanted]);
 }
 
 export async function markAllReadAction() {

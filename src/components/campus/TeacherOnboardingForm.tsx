@@ -2,12 +2,11 @@
 
 import { useActionState } from "react";
 import { completeTeacherOnboardingAction, type FormState } from "@/app/campus/actions";
-import { CertificationPicker } from "@/components/campus/CertificationPicker";
 import { submitWith } from "@/lib/form";
 
 const input = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-4 text-lg";
 
-export function TeacherOnboardingForm({ fullName, email, options }: { fullName: string; email: string; options: { slug: string; title: string }[] }) {
+export function TeacherOnboardingForm({ fullName, email }: { fullName: string; email: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(completeTeacherOnboardingAction, {});
 
   return (
@@ -31,7 +30,6 @@ export function TeacherOnboardingForm({ fullName, email, options }: { fullName: 
           <input id="ob-phone" name="contact_phone" inputMode="tel" required autoComplete="tel" placeholder="311 674 1900" className={input} />
         </div>
       </div>
-      <CertificationPicker options={options} selected={[]} />
       <button type="submit" disabled={pending} className="btn btn-primary w-full">{pending ? "Guardando…" : "Guardar y entrar al campus"}</button>
       <p role="alert" aria-live="assertive" className="text-lg text-red-800">{state.error}</p>
     </form>

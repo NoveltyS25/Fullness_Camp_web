@@ -102,9 +102,21 @@ CREATE TABLE IF NOT EXISTS enrollments (
 );
 CREATE INDEX IF NOT EXISTS enrollments_cohort_idx ON enrollments (cohort_id, status);
 
+-- Una clase es lo que dicta una docente (por ejemplo, «Marketing»). Puede estar en varias certificaciones a la vez.
+CREATE TABLE IF NOT EXISTS classes (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  teacher_id TEXT REFERENCES users (id) ON DELETE SET NULL,
+  modality TEXT NOT NULL DEFAULT 'virtual' CHECK (modality IN ('presencial', 'virtual', 'mixta')),
+  description TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS classes_teacher_idx ON classes (teacher_id);
+
+-- Cada encuentro de una clase con su fecha y hora. Lo ven las estudiantes de todas las certificaciones que incluyen esa clase.
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
-  cohort_id TEXT NOT NULL REFERENCES cohorts (id) ON DELETE CASCADE,
+  class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   starts_at TEXT NOT NULL,
   ends_at TEXT NOT NULL,
@@ -113,7 +125,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'cancelled')),
   updated_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS sessions_cohort_idx ON sessions (cohort_id, starts_at);
+CREATE INDEX IF NOT EXISTS sessions_class_idx ON sessions (class_id, starts_at);
 
 CREATE TABLE IF NOT EXISTS session_changes (
   id TEXT PRIMARY KEY,
@@ -168,7 +180,7 @@ CREATE TABLE IF NOT EXISTS leads (
 CREATE INDEX IF NOT EXISTS leads_created_idx ON leads (created_at);
 CREATE INDEX IF NOT EXISTS leads_ip_idx ON leads (ip_hash, created_at);
 
--- Pensum (plan de estudios) de cada certificación: módulos → temas. Los temas los pueden agregar o quitar las docentes y la administración.
+-- Pensum (plan de estudios) de cada certificación: módulos → clases.
 CREATE TABLE IF NOT EXISTS curriculum_modules (
   id TEXT PRIMARY KEY,
   program_slug TEXT NOT NULL,
@@ -178,33 +190,15 @@ CREATE TABLE IF NOT EXISTS curriculum_modules (
 );
 CREATE INDEX IF NOT EXISTS curriculum_modules_idx ON curriculum_modules (program_slug, position);
 
-CREATE TABLE IF NOT EXISTS curriculum_topics (
+-- Qué clases tiene cada módulo de una certificación. La administración arma esto; una clase puede estar en varias certificaciones.
+CREATE TABLE IF NOT EXISTS module_classes (
   id TEXT PRIMARY KEY,
   module_id TEXT NOT NULL REFERENCES curriculum_modules (id) ON DELETE CASCADE,
+  class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
   position INTEGER NOT NULL,
-  title TEXT NOT NULL,
-  created_by TEXT REFERENCES users (id) ON DELETE SET NULL,
-  created_at TEXT NOT NULL
+  UNIQUE (module_id, class_id)
 );
-CREATE INDEX IF NOT EXISTS curriculum_topics_idx ON curriculum_topics (module_id, position);
-
--- Qué docente dicta cada tema, cuántas clases, en qué horario (texto libre) y si es presencial o virtual.
-CREATE TABLE IF NOT EXISTS topic_teachers (
-  topic_id TEXT NOT NULL REFERENCES curriculum_topics (id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  modality TEXT NOT NULL CHECK (modality IN ('presencial', 'virtual', 'mixta')),
-  classes_count INTEGER,
-  schedule_note TEXT,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (topic_id, user_id)
-);
-
--- Certificaciones en las que cada docente dicta (las elige en su primer ingreso y puede cambiarlas).
-CREATE TABLE IF NOT EXISTS teacher_programs (
-  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  program_slug TEXT NOT NULL,
-  PRIMARY KEY (user_id, program_slug)
-);
+CREATE INDEX IF NOT EXISTS module_classes_class_idx ON module_classes (class_id);
 
 -- Para no volver a sembrar el pensum inicial de un programa si la administración lo borra a propósito.
 CREATE TABLE IF NOT EXISTS curriculum_seeded (

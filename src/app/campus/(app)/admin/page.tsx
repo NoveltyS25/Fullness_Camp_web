@@ -23,11 +23,9 @@ export default async function Admin() {
     <div className="space-y-14">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold sm:text-4xl">Administración</h1>
-        <div className="flex flex-wrap gap-3">
-          <Link href="/campus/admin/interesadas" className="btn btn-secondary">Personas interesadas</Link>
-          <Link href="/campus/profesor/temas" className="btn btn-secondary">Temas y docentes por certificación</Link>
-          <Link href="/campus/admin/quejas" className="btn btn-secondary">Quejas y denuncias{openComplaints > 0 ? ` (${openComplaints})` : ""}</Link>
-        </div>
+        {openComplaints > 0 && (
+          <Link href="/campus/admin/quejas" className="btn btn-primary">{openComplaints} {openComplaints === 1 ? "queja por revisar" : "quejas por revisar"}</Link>
+        )}
       </div>
 
       <section aria-labelledby="cohortes">
@@ -42,7 +40,6 @@ export default async function Admin() {
                   <span className="text-xl font-bold text-clay-dark">{c.name}</span>
                   {!c.active && <span className="ml-3 rounded-full bg-ink px-3 py-1 text-sm text-white">Inactiva</span>}
                   <span className="block text-muted">{c.sede} · {programs.find((p) => p.slug === c.program_slug)?.title ?? c.program_slug}</span>
-                  <span className="block text-muted">Profesora: {c.teacher_name ?? "sin asignar"}</span>
                 </Link>
               </li>
             ))}
@@ -76,13 +73,6 @@ export default async function Admin() {
               <label htmlFor="starts_on" className="mb-2 block text-lg font-medium">Inicia (opcional)</label>
               <input id="starts_on" name="starts_on" type="date" className={inputClass} />
             </div>
-          </div>
-          <div>
-            <label htmlFor="teacher_id" className="mb-2 block text-lg font-medium">Profesora</label>
-            <select id="teacher_id" name="teacher_id" className={inputClass} defaultValue="">
-              <option value="">Sin asignar por ahora</option>
-              {staff.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-            </select>
           </div>
         </ActionForm>
       </section>

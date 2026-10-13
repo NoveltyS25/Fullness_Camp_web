@@ -52,17 +52,23 @@ export interface SessionRow {
   location: string | null;
   online_url: string | null;
   status: "scheduled" | "cancelled";
-  cohort_name: string;
-  sede: string;
+  class_id: string;
+  class_title: string;
+  modality: string;
+  teacher_name: string | null;
 }
 
-const SESSION_SELECT = `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, c.name AS cohort_name, c.sede
-  FROM sessions s JOIN cohorts c ON c.id = s.cohort_id`;
+const SESSION_SELECT = `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name
+  FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id`;
+
+/** Clases de las certificaciones en las que la estudiante tiene una inscripción activa (sin terminar). */
+const STUDENT_CLASSES = `SELECT mc.class_id FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id
+  WHERE m.program_slug IN (SELECT program_slug FROM enrollments WHERE user_id = ? AND status = 'active' AND completed_at IS NULL)`;
 
 export function getStudentSessions(db: Db, userId: string): Promise<SessionRow[]> {
   return db.all<SessionRow>(
     `${SESSION_SELECT}
-     WHERE s.ends_at >= ? AND s.cohort_id IN (SELECT cohort_id FROM enrollments WHERE user_id = ? AND status = 'active' AND completed_at IS NULL AND cohort_id IS NOT NULL)
+     WHERE s.ends_at >= ? AND s.class_id IN (${STUDENT_CLASSES})
      ORDER BY s.starts_at LIMIT 80`,
     [nowIso(), userId],
   );
@@ -105,30 +111,35 @@ export async function updateProfile(
 
 // ------------------------------------------------------------------ profesoras
 
-export function getTeacherSessions(db: Db, actor: Pick<User, "id" | "role">): Promise<SessionRow[]> {
-  if (actor.role === "admin") {
-    return db.all<SessionRow>(`${SESSION_SELECT} WHERE s.ends_at >= ? ORDER BY s.starts_at LIMIT 100`, [nowIso()]);
-  }
-  return db.all<SessionRow>(`${SESSION_SELECT} WHERE s.ends_at >= ? AND c.teacher_id = ? ORDER BY s.starts_at LIMIT 100`, [nowIso(), actor.id]);
+/** Sesiones de las clases que dicta esta persona, entre dos instantes (para el calendario mensual). */
+export function getTeacherSessionsBetween(db: Db, teacherId: string, fromIso: string, toIso: string): Promise<SessionRow[]> {
+  return db.all<SessionRow>(`${SESSION_SELECT} WHERE c.teacher_id = ? AND s.starts_at >= ? AND s.starts_at < ? ORDER BY s.starts_at`, [teacherId, fromIso, toIso]);
+}
+
+export function getClassSessions(db: Db, classId: string, fromIso: string): Promise<SessionRow[]> {
+  return db.all<SessionRow>(`${SESSION_SELECT} WHERE s.class_id = ? AND s.ends_at >= ? ORDER BY s.starts_at LIMIT 120`, [classId, fromIso]);
 }
 
 export interface EditableSession extends SessionRow {
-  cohort_id: string;
   teacher_id: string | null;
 }
 
+/** Solo la docente de la clase o la administración pueden ver una sesión para cambiarla. */
 export async function getSessionForActor(db: Db, actor: Pick<User, "id" | "role">, sessionId: string): Promise<EditableSession | undefined> {
-  const row = await db.get<EditableSession>(
-    `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.cohort_id, c.name AS cohort_name, c.sede, c.teacher_id
-     FROM sessions s JOIN cohorts c ON c.id = s.cohort_id WHERE s.id = ?`,
-    [sessionId],
-  );
+  const row = await db.get<EditableSession>(`SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name, c.teacher_id
+     FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id WHERE s.id = ?`, [sessionId]);
   if (!row) return undefined;
   return actor.role === "admin" || row.teacher_id === actor.id ? row : undefined;
 }
 
-export async function countActiveEnrollees(db: Db, cohortId: string): Promise<number> {
-  const r = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM enrollments WHERE cohort_id = ? AND status = 'active' AND completed_at IS NULL", [cohortId]);
+/** Estudiantes activas que verán la clase (de todas las certificaciones que la incluyen). */
+export async function countClassStudents(db: Db, classId: string): Promise<number> {
+  const r = await db.get<{ n: number }>(
+    `SELECT COUNT(DISTINCT e.user_id) AS n FROM enrollments e
+     WHERE e.status = 'active' AND e.completed_at IS NULL
+       AND e.program_slug IN (SELECT m.program_slug FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id WHERE mc.class_id = ?)`,
+    [classId],
+  );
   return Number(r?.n ?? 0);
 }
 
@@ -182,8 +193,12 @@ export async function rescheduleSession(db: Db, actor: Pick<User, "id" | "role">
     const { title, body } = describeChange(s.title, newData, reason);
     const students = await tx.all<{ id: string; email: string; whatsapp_phone: string | null; notify_email: number; notify_whatsapp: number }>(
       `SELECT u.id, u.email, u.whatsapp_phone, u.notify_email, u.notify_whatsapp
-       FROM enrollments e JOIN users u ON u.id = e.user_id WHERE e.cohort_id = ? AND e.status = 'active' AND e.completed_at IS NULL`,
-      [s.cohort_id],
+       FROM users u WHERE u.id IN (
+         SELECT e.user_id FROM enrollments e
+         WHERE e.status = 'active' AND e.completed_at IS NULL
+           AND e.program_slug IN (SELECT m.program_slug FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id WHERE mc.class_id = ?)
+       )`,
+      [s.class_id],
     );
     for (const st of students) {
       const notificationId = newId();
@@ -338,40 +353,12 @@ export async function setCohortActive(db: Db, id: string, active: boolean): Prom
   await db.run("UPDATE cohorts SET active = ? WHERE id = ?", [active ? 1 : 0, id]);
 }
 
-export function listCohortSessions(db: Db, cohortId: string): Promise<SessionRow[]> {
-  return db.all<SessionRow>(`${SESSION_SELECT} WHERE s.cohort_id = ? ORDER BY s.starts_at`, [cohortId]);
-}
-
 export function listCohortEnrollments(db: Db, cohortId: string) {
   return db.all<{ enrollment_id: string; completed_at: string | null; user_id: string; status: "active" | "paused" | "cancelled"; full_name: string; cedula: string; email: string; whatsapp_phone: string | null }>(
     `SELECT e.id AS enrollment_id, e.completed_at, e.user_id, e.status, u.full_name, u.cedula, u.email, u.whatsapp_phone
      FROM enrollments e JOIN users u ON u.id = e.user_id WHERE e.cohort_id = ? ORDER BY u.full_name`,
     [cohortId],
   );
-}
-
-/** Crea una clase o la repite semanalmente. Colombia no cambia de hora, así que +7 días exactos mantiene la hora. */
-export async function addSessions(
-  db: Db,
-  s: { cohortId: string; title: string; startsAt: string; endsAt: string; weeks: number; location: string | null; onlineUrl: string | null },
-): Promise<number> {
-  const WEEK = 7 * 24 * 3600_000;
-  const weeks = Math.min(40, Math.max(1, s.weeks));
-  await db.transaction(async (tx) => {
-    for (let i = 0; i < weeks; i++) {
-      await tx.run("INSERT INTO sessions (id, cohort_id, title, starts_at, ends_at, location, online_url, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)", [
-        newId(),
-        s.cohortId,
-        weeks > 1 ? `${s.title} (${i + 1}/${weeks})` : s.title,
-        new Date(new Date(s.startsAt).getTime() + i * WEEK).toISOString(),
-        new Date(new Date(s.endsAt).getTime() + i * WEEK).toISOString(),
-        s.location,
-        s.onlineUrl,
-        nowIso(),
-      ]);
-    }
-  });
-  return weeks;
 }
 
 export async function setEnrollmentStatus(db: Db, cohortId: string, userId: string, status: "active" | "paused" | "cancelled"): Promise<void> {

@@ -327,13 +327,20 @@ test("los días hábiles saltan sábados y domingos", () => {
   assert.equal(addBusinessDays(new Date("2026-10-09T12:00:00Z"), 1).toISOString().slice(0, 10), "2026-10-12"); // viernes → lunes
 });
 
-// ---------------------------------------------------------------- pensum (módulos, temas, docentes) y certificado
 
-import { addTopic, assignTopic, deleteTopic, getCertificate, getPensum, setCourseCompleted, unassignTopic } from "./curriculum.ts";
+// ---------------------------------------------------------------- clases propias de cada docente, pensum, horarios y certificado
+
+import { createStaffAccount, getStudentSessions, rescheduleSession } from "./campus.ts";
+import {
+  addClassSessions, addModule, createClass, deleteClass, getClassStudents, getPensum, getProgramTeachers, listClasses, placeClass, unplaceClass, updateClass,
+} from "./classes.ts";
+import { getCertificate, setCourseCompleted } from "./curriculum.ts";
+import { isPendingCedula } from "./users.ts";
 
 const HATHA = "hatha-vinyasa-yoga-y-meditacion";
+const PILATES = "certificacion-de-yoga-y-pilates";
 
-async function pensumSetup() {
+async function classesSetup() {
   const db = await setup();
   const admin = await createUser(db, { cedula: "1", fullName: "Admin", email: "a@x.co", role: "admin", password: "Correcta123" });
   const t1 = await createUser(db, { cedula: "2", fullName: "Docente Uno", email: "t1@x.co", role: "teacher", password: "Correcta123" });
@@ -342,46 +349,107 @@ async function pensumSetup() {
   return { db, admin, t1, t2, stu };
 }
 
-test("el pensum de Hatha se siembra una sola vez con módulos y temas", async () => {
-  const { db } = await pensumSetup();
+async function enroll(db: Db, userId: string, programSlug: string) {
+  const id = newId();
+  await db.run("INSERT INTO enrollments (id, user_id, program_slug, status, created_at) VALUES (?, ?, ?, 'active', ?)", [id, userId, programSlug, nowIso()]);
+  return id;
+}
+
+const FUTURE = { startsAt: "2099-03-02T23:00:00.000Z", endsAt: "2099-03-03T01:00:00.000Z" };
+
+test("el pensum de Hatha se siembra una sola vez, con clases sin docente", async () => {
+  const { db } = await classesSetup();
   const a = await getPensum(db, HATHA);
   const b = await getPensum(db, HATHA);
   assert.ok(a.length >= 5);
-  assert.equal(a.flatMap((m) => m.topics).length, b.flatMap((m) => m.topics).length);
-  assert.ok(a.every((m) => m.topics.every((t) => t.teachers.length === 0)));
+  assert.equal(a.flatMap((m) => m.classes).length, b.flatMap((m) => m.classes).length);
+  assert.ok(a.every((m) => m.classes.every((c) => c.teacher_id === null)));
 });
 
-test("una docente se asigna tema, horario y modalidad; solo a sí misma", async () => {
-  const { db, t1, t2 } = await pensumSetup();
-  const topic = (await getPensum(db, HATHA))[0].topics[0];
-  const input = { topicId: topic.id, userId: t1.id, modality: "virtual", classesCount: "4", scheduleNote: "Lunes 6 p. m." };
-  assert.deepEqual(await assignTopic(db, t1, input), { ok: true });
-  assert.equal((await assignTopic(db, t1, { ...input, userId: t2.id })).ok, false);
-  assert.equal((await assignTopic(db, t1, { ...input, modality: "otra" })).ok, false);
-  assert.equal((await assignTopic(db, t1, { ...input, classesCount: "0" })).ok, false);
-  const t = (await getPensum(db, HATHA))[0].topics[0];
-  assert.equal(t.teachers[0].classes_count, 4);
-  assert.equal(t.teachers[0].modality, "virtual");
-  await assignTopic(db, t1, { ...input, modality: "presencial" }); // editar no duplica
-  assert.equal((await getPensum(db, HATHA))[0].topics[0].teachers.length, 1);
-  assert.equal((await unassignTopic(db, t1, topic.id, t1.id)).ok, true);
+test("una docente crea su clase; una estudiante no; y no puede quedarse con la de otra", async () => {
+  const { db, t1, t2, stu } = await classesSetup();
+  assert.equal((await createClass(db, stu, { title: "Colada", modality: "virtual", description: "" })).ok, false);
+  const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "", teacherId: t2.id }); // teacherId se ignora para docentes
+  assert.ok(made.ok);
+  assert.equal((await listClasses(db))[0].teacher_id, t1.id);
+  assert.equal((await updateClass(db, t2, made.ok ? made.id : "", { title: "Mía ahora", modality: "virtual", description: "" })).ok, false);
+  assert.equal((await createClass(db, t1, { title: "X", modality: "otra", description: "" })).ok, false);
 });
 
-test("una estudiante no puede editar el pensum; una docente no quita lo que dicta otra", async () => {
-  const { db, admin, t1, t2, stu } = await pensumSetup();
-  const m = (await getPensum(db, HATHA))[0];
-  assert.equal((await addTopic(db, stu, m.id, "Tema colado")).ok, false);
-  assert.equal((await addTopic(db, t1, m.id, "Tema nuevo de la docente")).ok, true);
-  const mine = (await getPensum(db, HATHA))[0].topics.find((t) => t.title === "Tema nuevo de la docente")!;
-  await assignTopic(db, t2, { topicId: mine.id, userId: t2.id, modality: "virtual", classesCount: "", scheduleNote: "" });
-  assert.equal((await deleteTopic(db, t1, mine.id)).ok, false); // otra docente lo dicta
-  assert.equal((await deleteTopic(db, admin, mine.id)).ok, true);
+test("la misma clase en dos certificaciones: sus estudiantes son las de ambas, con su certificación al lado", async () => {
+  const { db, admin, t1, stu } = await classesSetup();
+  const stu2 = await createUser(db, { cedula: "5", fullName: "Otra Estudiante", email: "s2@x.co", role: "student", password: "Correcta123" });
+  const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
+  assert.ok(made.ok);
+  const classId = made.ok ? made.id : "";
+  await addModule(db, admin, PILATES, "Módulo 1");
+  const hathaModule = (await getPensum(db, HATHA))[0].id;
+  const pilatesModule = (await getPensum(db, PILATES))[0].id;
+  assert.equal((await placeClass(db, t1, hathaModule, classId)).ok, false); // solo la administración arma certificaciones
+  assert.deepEqual(await placeClass(db, admin, hathaModule, classId), { ok: true });
+  assert.deepEqual(await placeClass(db, admin, pilatesModule, classId), { ok: true });
+  assert.equal((await placeClass(db, admin, pilatesModule, classId)).ok, false); // repetida
+
+  await enroll(db, stu.id, HATHA);
+  await enroll(db, stu2.id, PILATES);
+  const students = await getClassStudents(db, classId);
+  assert.deepEqual(students.map((s) => `${s.full_name}:${s.program_slug}`).sort(), [`Estudiante:${HATHA}`, `Otra Estudiante:${PILATES}`]);
+  assert.equal((await getProgramTeachers(db, HATHA))[0].full_name, "Docente Uno");
+});
+
+test("cambiar el horario de una clase avisa a las estudiantes de todas sus certificaciones", async () => {
+  const { db, admin, t1, t2, stu } = await classesSetup();
+  const stu2 = await createUser(db, { cedula: "5", fullName: "Otra", email: "s2@x.co", role: "student", password: "Correcta123" });
+  const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
+  const classId = made.ok ? made.id : "";
+  await addModule(db, admin, PILATES, "Módulo 1");
+  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, classId);
+  await placeClass(db, admin, (await getPensum(db, PILATES))[0].id, classId);
+  await enroll(db, stu.id, HATHA);
+  await enroll(db, stu2.id, PILATES);
+  assert.deepEqual(await addClassSessions(db, t1, { classId, title: "", ...FUTURE, weeks: 3, location: null, onlineUrl: null }), { ok: true, created: 3 });
+  assert.deepEqual(await addClassSessions(db, t2, { classId, title: "", ...FUTURE, weeks: 1, location: null, onlineUrl: null }), { ok: false, error: "No tienes permiso para cambiar los horarios de esta clase." });
+
+  const mine = await getStudentSessions(db, stu.id);
+  assert.equal(mine.length, 3);
+  assert.equal(mine[0].class_title, "Marketing");
+  const r = await rescheduleSession(db, t1, { sessionId: mine[0].id, startsAt: "2099-03-04T23:00:00.000Z", endsAt: "2099-03-05T01:00:00.000Z", location: null, onlineUrl: null, status: "scheduled", reason: "Viaje de la docente" });
+  assert.deepEqual(r, { ok: true, notified: 2 });
+  const n = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM notifications");
+  assert.equal(Number(n?.n), 2);
+  // otra docente no puede mover la sesión
+  assert.equal((await rescheduleSession(db, t2, { sessionId: mine[1].id, startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: null, onlineUrl: null, status: "cancelled", reason: "No debería" })).ok, false);
+});
+
+test("una estudiante con el curso terminado deja de ver sus clases; sin inscripción no ve ninguna", async () => {
+  const { db, admin, t1, stu } = await classesSetup();
+  const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
+  const classId = made.ok ? made.id : "";
+  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, classId);
+  await addClassSessions(db, t1, { classId, title: "", ...FUTURE, weeks: 2, location: null, onlineUrl: null });
+  assert.equal((await getStudentSessions(db, stu.id)).length, 0);
+  const eid = await enroll(db, stu.id, HATHA);
+  assert.equal((await getStudentSessions(db, stu.id)).length, 2);
+  await setCourseCompleted(db, admin, eid, true);
+  assert.equal((await getStudentSessions(db, stu.id)).length, 0);
+});
+
+test("quitar una clase de la certificación no la borra; la docente no borra clases que están en una certificación", async () => {
+  const { db, admin, t1 } = await classesSetup();
+  const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
+  const classId = made.ok ? made.id : "";
+  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, classId);
+  assert.equal((await deleteClass(db, t1, classId)).ok, false);
+  const placement = (await getPensum(db, HATHA)).flatMap((m) => m.classes).find((c) => c.class_id === classId)!.placement_id;
+  assert.equal((await unplaceClass(db, t1, placement)).ok, false);
+  assert.equal((await unplaceClass(db, admin, placement)).ok, true);
+  assert.equal((await listClasses(db)).some((c) => c.id === classId), true);
+  assert.equal((await deleteClass(db, t1, classId)).ok, true);
 });
 
 test("el certificado solo lo ve su dueña o la administración, y solo si el curso está terminado", async () => {
-  const { db, admin, t1, stu } = await pensumSetup();
-  const eid = newId();
-  await db.run("INSERT INTO enrollments (id, user_id, program_slug, status, created_at) VALUES (?, ?, ?, 'active', ?)", [eid, stu.id, HATHA, nowIso()]);
+  const { db, admin, t1, stu } = await classesSetup();
+  const eid = await enroll(db, stu.id, HATHA);
   assert.equal(await getCertificate(db, stu, eid), undefined);
   assert.equal((await setCourseCompleted(db, t1, eid, true)).ok, false);
   assert.equal((await setCourseCompleted(db, admin, eid, true)).ok, true);
@@ -391,11 +459,7 @@ test("el certificado solo lo ve su dueña o la administración, y solo si el cur
   assert.ok(await getCertificate(db, admin, eid));
 });
 
-// ---------------------------------------------------------------- docentes sin cédula y certificaciones
-
-import { createStaffAccount } from "./campus.ts";
-import { getProgramTeachers, getTeacherPrograms, setTeacherPrograms } from "./curriculum.ts";
-import { isPendingCedula } from "./users.ts";
+// ---------------------------------------------------------------- docentes sin cédula
 
 test("una docente se crea sin cédula con un código provisional que no sirve para ingresar", async () => {
   const db = await setup();
@@ -403,19 +467,6 @@ test("una docente se crea sin cédula con un código provisional que no sirve pa
   assert.equal(r.ok, true);
   const row = await db.get<{ cedula: string }>("SELECT cedula FROM users WHERE email = ?", ["nueva@x.co"]);
   assert.ok(isPendingCedula(row!.cedula));
-  // misma invitación dos veces: no se duplica
   assert.equal((await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Docente Nueva", email: "nueva@x.co", role: "teacher" }, "http://localhost:3000")).ok, false);
-  // una estudiante no puede crear cuentas
   assert.equal((await createStaffAccount(db, { role: "student" }, { cedula: null, fullName: "X", email: "x@x.co", role: "teacher" }, "http://localhost:3000")).ok, false);
-});
-
-test("las certificaciones de una docente se guardan, ignoran las inválidas y la listan en el plan", async () => {
-  const { db, t1 } = await pensumSetup();
-  await setTeacherPrograms(db, t1.id, [HATHA, "no-existe", "retiro-de-abundancia"]);
-  assert.deepEqual(await getTeacherPrograms(db, t1.id), [HATHA]);
-  const teachers = await getProgramTeachers(db, HATHA);
-  assert.equal(teachers.length, 1);
-  assert.equal(teachers[0].full_name, "Docente Uno");
-  await setTeacherPrograms(db, t1.id, []);
-  assert.equal((await getProgramTeachers(db, HATHA)).length, 0);
 });

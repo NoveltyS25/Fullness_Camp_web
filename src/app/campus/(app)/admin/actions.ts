@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getProgram } from "@/data/programs";
-import { fromLocalInput } from "@/lib/campus/time";
-import { addSessions, createCohort, createStaffAccount, enrollManual, setCohortActive, setEnrollmentStatus, setRoleByCedula } from "@/server/campus";
+import { createCohort, createStaffAccount, enrollManual, setCohortActive, setEnrollmentStatus, setRoleByCedula } from "@/server/campus";
 import { setCourseCompleted } from "@/server/curriculum";
 import { getDb } from "@/server/db";
 import { normalizeCedula } from "@/server/security";
@@ -37,34 +36,11 @@ export async function createCohortAction(_prev: FormState, fd: FormData): Promis
     programSlug,
     name,
     sede,
-    teacherId: text(fd, "teacher_id") || null,
+    teacherId: null,
     startsOn: text(fd, "starts_on") || null,
   });
   revalidatePath("/campus/admin");
   redirect(`/campus/admin/cohortes/${id}`);
-}
-
-export async function addSessionsAction(_prev: FormState, fd: FormData): Promise<FormState> {
-  await requireAdmin();
-  const title = text(fd, "title").slice(0, 160);
-  const start = fromLocalInput(text(fd, "starts_at"));
-  const end = fromLocalInput(text(fd, "ends_at"));
-  if (!title) return { error: "Escribe el título de la clase." };
-  if (!start || !end) return { error: "Revisa la fecha y la hora de inicio y de fin." };
-  if (new Date(end) <= new Date(start)) return { error: "La hora de fin debe ser después de la de inicio." };
-
-  const cohortId = text(fd, "cohort_id");
-  const n = await addSessions(getDb(), {
-    cohortId,
-    title,
-    startsAt: start,
-    endsAt: end,
-    weeks: Number.parseInt(text(fd, "weeks"), 10) || 1,
-    location: text(fd, "location") || null,
-    onlineUrl: text(fd, "online_url") || null,
-  });
-  revalidatePath(`/campus/admin/cohortes/${cohortId}`);
-  return { message: `✓ ${n === 1 ? "Clase creada" : `${n} clases creadas`}.` };
 }
 
 export async function enrollManualAction(_prev: FormState, fd: FormData): Promise<FormState> {

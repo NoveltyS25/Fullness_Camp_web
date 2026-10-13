@@ -9,7 +9,8 @@
  * (esa carpeta no se sube a GitHub).
  */
 import { existsSync, rmSync, writeFileSync } from "node:fs";
-import { addSessions, createCohort } from "../src/server/campus.ts";
+import { createCohort } from "../src/server/campus.ts";
+import { addClassSessions, createClass, getPensum, placeClass } from "../src/server/classes.ts";
 import { getDb } from "../src/server/db/index.ts";
 import { generateTempPassword } from "../src/server/security.ts";
 import { createUser, findUserByCedula } from "../src/server/users.ts";
@@ -33,7 +34,7 @@ async function ensureUser(cedula: string, fullName: string, email: string, role:
 }
 
 const admin = await ensureUser("1000000001", "Administradora Demo", "admin.demo@example.com", "admin", false);
-void admin;
+
 const teacher = await ensureUser("1000000002", "Profesora Demo", "profesora.demo@example.com", "teacher", false);
 const student = await ensureUser("1000000003", "Estudiante Demo", "estudiante.demo@example.com", "student", false);
 
@@ -46,34 +47,44 @@ function nextWeekday(dayOfWeek: number, hourUtc: number): Date {
 }
 
 const cohorts = [
-  { slug: "hatha-vinyasa-yoga-y-meditacion", name: "Hatha Vinyasa 300h · Grupo A", sede: "Bogotá", day: 2, title: "Módulo", place: "Sede Bogotá, calle 127", url: null },
-  { slug: "certificacion-de-yoga-y-pilates", name: "Yoga y Pilates 250h · Grupo A", sede: "Cajicá", day: 3, title: "Módulo", place: "Sede Cajicá", url: null },
-  { slug: "certificacion-de-yoga-kids", name: "Yoga Kids 200h · Grupo A", sede: "Online", day: 4, title: "Clase", place: null, url: "https://meet.example.com/yoga-kids" },
-  { slug: "yoga-prenatal-nacimiento-consciente", name: "Taller gestacional · Grupo A", sede: "Tabío", day: 6, title: "Taller", place: "Sede Tabío", url: null },
+  { slug: "hatha-vinyasa-yoga-y-meditacion", name: "Hatha Vinyasa 300h · Grupo A", sede: "Bogotá" },
+  { slug: "certificacion-de-yoga-y-pilates", name: "Yoga y Pilates 250h · Grupo A", sede: "Cajicá" },
+  { slug: "certificacion-de-yoga-kids", name: "Yoga Kids 200h · Grupo A", sede: "Online" },
+  { slug: "yoga-prenatal-nacimiento-consciente", name: "Taller gestacional · Grupo A", sede: "Tabío" },
 ] as const;
 
 const existing = new Set((await db.all<{ name: string }>("SELECT name FROM cohorts")).map((c) => c.name));
-let first: string | null = null;
 for (const c of cohorts) {
   if (existing.has(c.name)) continue;
-  const start = nextWeekday(c.day, 23);
-  const id = await createCohort(db, {
-    programSlug: c.slug,
-    name: c.name,
-    sede: c.sede,
-    teacherId: teacher.id,
-    startsOn: start.toISOString().slice(0, 10),
-  });
-  await addSessions(db, {
-    cohortId: id,
-    title: c.title,
-    startsAt: start.toISOString(),
-    endsAt: new Date(start.getTime() + 2 * 3600_000).toISOString(),
-    weeks: 12,
-    location: c.place,
-    onlineUrl: c.url,
-  });
-  first ??= id;
+  await createCohort(db, { programSlug: c.slug, name: c.name, sede: c.sede, teacherId: null, startsOn: nextWeekday(2, 23).toISOString().slice(0, 10) });
+}
+
+// Clases de demostración: la docente demo dicta algunas del pensum de Hatha y una clase propia que está en dos certificaciones.
+const hasClasses = await db.get("SELECT 1 AS ok FROM sessions LIMIT 1");
+if (!hasClasses) {
+  const hatha = await getPensum(db, "hatha-vinyasa-yoga-y-meditacion");
+  const first3 = hatha.flatMap((m) => m.classes).slice(0, 3);
+  const days = [2, 4, 3];
+  for (const [i, c] of first3.entries()) {
+    await db.run("UPDATE classes SET teacher_id = ? WHERE id = ?", [teacher.id, c.class_id]);
+    const start = nextWeekday(days[i], 23);
+    await addClassSessions(db, teacher, { classId: c.class_id, title: "", startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 2 * 3600_000).toISOString(), weeks: 8, location: i === 0 ? "Sede Bogotá, calle 127" : null, onlineUrl: i === 0 ? null : "https://meet.example.com/demo" });
+  }
+
+  // «Marketing»: una sola clase en dos certificaciones (como la de Paula).
+  const made = await createClass(db, teacher, { title: "Marketing para instructoras", modality: "virtual", description: "Cómo darte a conocer y construir tu proyecto de yoga." });
+  if (made.ok) {
+    const start = nextWeekday(5, 23);
+    await addClassSessions(db, teacher, { classId: made.id, title: "", startsAt: start.toISOString(), endsAt: new Date(start.getTime() + 2 * 3600_000).toISOString(), weeks: 6, location: null, onlineUrl: "https://meet.example.com/marketing" });
+    for (const slug of ["hatha-vinyasa-yoga-y-meditacion", "certificacion-de-yoga-y-pilates"]) {
+      let modules = await getPensum(db, slug);
+      if (modules.length === 0) {
+        await db.run("INSERT INTO curriculum_modules (id, program_slug, position, title, created_at) VALUES (?, ?, 1, ?, ?)", [crypto.randomUUID(), slug, "Módulo 1", new Date().toISOString()]);
+        modules = await getPensum(db, slug);
+      }
+      await placeClass(db, { id: admin.id, role: "admin" }, modules[modules.length - 1].id, made.id);
+    }
+  }
 }
 
 // La estudiante demo ya está inscrita en el primer grupo (como si hubiera pagado antes).

@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import { destroySession, getUserBySessionToken } from "./auth.ts";
+import { getEntitlements } from "./campus.ts";
 import { getDb } from "./db/index.ts";
 import type { User } from "./users.ts";
 
@@ -50,3 +51,32 @@ export async function baseUrl(): Promise<string> {
 }
 
 export const isDemoMode = (): boolean => process.env.DEMO_MODE === "true";
+
+// ------------------------------------------------------------------ paneles (vistas) del campus
+
+export type View = "admin" | "teacher" | "student";
+
+export const VIEW_LABEL: Record<View, string> = {
+  admin: "Panel de administración",
+  teacher: "Panel de docente",
+  student: "Panel de estudiante",
+};
+
+export const VIEW_HOME: Record<View, string> = { admin: "/campus/admin", teacher: "/campus/profesor", student: "/campus" };
+
+/**
+ * Cada persona puede tener hasta tres paneles, con la misma cédula:
+ *  - administración (rol administradora), docente (docentes y administradoras) y estudiante (si tiene inscripción propia).
+ * La vista elegida se recuerda en una cookie; si ya no está disponible se usa la primera.
+ */
+export const getViews = cache(async (): Promise<{ user: User; available: View[]; current: View } | null> => {
+  const user = await getCurrentUser();
+  if (!user) return null;
+  const available: View[] = [];
+  if (user.role === "admin") available.push("admin");
+  if (user.role === "admin" || user.role === "teacher") available.push("teacher");
+  if (user.role === "student" || (await getEntitlements(getDb(), user.id)).length > 0) available.push("student");
+  const chosen = (await cookies()).get("fc_view")?.value as View | undefined;
+  const current = chosen && available.includes(chosen) ? chosen : available[0];
+  return { user, available, current };
+});

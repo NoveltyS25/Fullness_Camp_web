@@ -6,6 +6,7 @@ import { dayKey, formatDay } from "@/lib/campus/time";
 import { whatsappLink } from "@/lib/whatsapp";
 import { canAccessCampus, countPendingOrders, getEntitlements, getStudentSessions, type SessionRow } from "@/server/campus";
 import { getDb } from "@/server/db";
+import { getViews, VIEW_HOME } from "@/server/web";
 import { getCurrentUser } from "@/server/web";
 
 export const metadata = { title: "Mi horario" };
@@ -14,6 +15,9 @@ export default async function MiHorario(props: PageProps<"/campus">) {
   const user = await getCurrentUser();
   if (!user) redirect("/campus/ingresar");
   const { bienvenida } = await props.searchParams;
+  // Quien está en su panel de administración o de docente no ve aquí el horario de estudiante.
+  const views = await getViews();
+  if (views && views.current !== "student") redirect(VIEW_HOME[views.current]);
 
   const db = getDb();
   const entitlements = await getEntitlements(db, user.id);
@@ -64,7 +68,7 @@ export default async function MiHorario(props: PageProps<"/campus">) {
               <li key={e.enrollment_id} className="rounded-3xl border border-clay-soft bg-white p-5">
                 <h3 className="text-xl font-bold text-clay-dark">{getProgram(e.program_slug)?.title ?? e.program_slug}</h3>
                 {e.cohort_name ? (
-                  <p className="mt-2 text-muted">Grupo: {e.cohort_name} · {e.sede}<br />Profesora: {e.teacher_name ?? "por asignar"}</p>
+                  <p className="mt-2 text-muted">Grupo: {e.cohort_name} · {e.sede}</p>
                 ) : (
                   <p className="mt-2 text-muted">Pago confirmado ✓ Te asignaremos grupo y horario muy pronto.</p>
                 )}

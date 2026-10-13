@@ -1,56 +1,99 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { SessionCard, } from "@/components/campus/SessionCard";
-import { dayKey, formatDay } from "@/lib/campus/time";
-import { getTeacherSessions, type SessionRow } from "@/server/campus";
+import { MonthCalendar } from "@/components/campus/MonthCalendar";
+import { currentMonth, monthRangeIso, parseMonth } from "@/lib/campus/calendar";
+import { getTeacherSessionsBetween } from "@/server/campus";
+import { getTeacherClasses, MODALITIES } from "@/server/classes";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
+import { createClassAction } from "./actions";
 
 export const metadata = { title: "Mis clases" };
+
+const field = "min-h-12 w-full rounded-xl border-2 border-clay-soft bg-white px-3 text-lg";
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function MisClases(props: PageProps<"/campus/profesor">) {
   const user = await getCurrentUser();
   if (!user || (user.role !== "teacher" && user.role !== "admin")) redirect("/campus");
-  const { guardado } = await props.searchParams;
+  const q = await props.searchParams;
 
-  const sessions = await getTeacherSessions(getDb(), user);
-  const byDay = new Map<string, SessionRow[]>();
-  for (const s of sessions) byDay.set(dayKey(s.starts_at), [...(byDay.get(dayKey(s.starts_at)) ?? []), s]);
+  const { year, month } = parseMonth(one(q.mes)) ?? currentMonth();
+  const range = monthRangeIso(year, month);
+  const db = getDb();
+  const [sessions, classes] = await Promise.all([getTeacherSessionsBetween(db, user.id, range.from, range.to), getTeacherClasses(db, user.id)]);
 
-  const notified = guardado === undefined ? null : Number(Array.isArray(guardado) ? guardado[0] : guardado);
+  const notified = one(q.guardado) === undefined ? null : Number(one(q.guardado));
+  const error = one(q.error);
 
   return (
-    <>
-      <h1 className="mb-2 text-3xl font-bold sm:text-4xl">Mis clases</h1>
-      <p className="mb-6 text-lg text-muted">Si necesitas mover o cancelar una clase, tus estudiantes recibirán el aviso automáticamente.</p>
+    <div className="space-y-12">
+      <div>
+        <h1 className="mb-2 text-3xl font-bold sm:text-4xl">Mis clases</h1>
+        <p className="text-lg text-muted">
+          Aquí ves tus horarios del mes. Toca una clase para cambiar su día u hora: tus estudiantes reciben el aviso automáticamente.
+        </p>
+      </div>
 
-      <section aria-labelledby="temas" className="mb-10 rounded-3xl bg-clay-soft p-6">
-        <h2 id="temas" className="mb-2 text-2xl font-bold">Mis temas por certificación</h2>
-        <p className="mb-4 text-lg">Mira los módulos de cada certificación, agrega o quita temas, asígnate los que dictas y define horario y si es presencial o virtual.</p>
-        <Link href="/campus/profesor/temas" className="btn btn-primary">Ver certificaciones y temas</Link>
-      </section>
-
+      {one(q.bienvenida) && (
+        <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">
+          ✓ Listo, quedó guardado tu registro. Tu primer paso: agrega abajo las clases que dictas y sus horarios.
+        </p>
+      )}
       {notified !== null && !Number.isNaN(notified) && (
-        <p role="status" className="mb-8 rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">
+        <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">
           ✓ Cambio guardado.{" "}
           {notified === 0
             ? "No había estudiantes inscritas o no hubo cambios que avisar."
             : `Avisamos a ${notified} ${notified === 1 ? "estudiante" : "estudiantes"} en el campus, y por correo o WhatsApp según sus preferencias.`}
         </p>
       )}
+      {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-lg font-medium text-red-800">{error}</p>}
 
-      {sessions.length === 0 ? (
-        <p className="rounded-3xl border border-clay-soft bg-white p-8 text-center text-xl">No tienes clases próximas asignadas.</p>
-      ) : (
-        <div className="space-y-8">
-          {[...byDay.entries()].map(([key, list]) => (
-            <section key={key} aria-labelledby={`d-${key}`}>
-              <h2 id={`d-${key}`} className="mb-3 text-xl font-bold">{formatDay(list[0].starts_at)}</h2>
-              <ul className="space-y-3">{list.map((s) => <SessionCard key={s.id} s={s} editHref={`/campus/profesor/sesion/${s.id}`} />)}</ul>
-            </section>
-          ))}
-        </div>
-      )}
-    </>
+      <MonthCalendar year={year} month={month} sessions={sessions} basePath="/campus/profesor" />
+
+      <section aria-labelledby="lista">
+        <h2 id="lista" className="mb-4 text-2xl font-bold">Las clases que dicto</h2>
+        {classes.length === 0 ? (
+          <p className="rounded-3xl border border-clay-soft bg-white p-6 text-lg">Aún no has agregado clases. Agrega la primera abajo.</p>
+        ) : (
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {classes.map((c) => (
+              <li key={c.id}>
+                <Link href={`/campus/profesor/clases/${c.id}`} className="block h-full rounded-3xl border border-clay-soft bg-white p-5 no-underline hover:border-clay-dark">
+                  <span className="text-xl font-bold text-clay-dark">{c.title}</span>
+                  <span className="mt-1 block text-muted">{MODALITIES[c.modality]} · {c.upcoming_count} {c.upcoming_count === 1 ? "clase programada" : "clases programadas"}</span>
+                  <span className="mt-1 block text-muted">
+                    {c.programs.length === 0 ? "Aún no está en ninguna certificación" : `En ${c.programs.length} ${c.programs.length === 1 ? "certificación" : "certificaciones"}`}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="nueva" className="max-w-2xl">
+        <h2 id="nueva" className="mb-2 text-2xl font-bold">Agregar una clase</h2>
+        <p className="mb-4 text-muted">Escribe el nombre de lo que dictas (por ejemplo, «Marketing»). La administración la coloca en las certificaciones que corresponda; tú solo defines sus horarios.</p>
+        <form action={createClassAction} className="space-y-4">
+          <label className="block">
+            <span className="mb-1 block text-lg font-medium">Nombre de la clase</span>
+            <input name="title" required minLength={2} maxLength={160} className={field} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-lg font-medium">Modalidad</span>
+            <select name="modality" defaultValue="virtual" className={field}>
+              {Object.entries(MODALITIES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-lg font-medium">Descripción <span className="font-normal text-muted">(opcional)</span></span>
+            <textarea name="description" rows={3} maxLength={600} className="w-full rounded-xl border-2 border-clay-soft bg-white p-3 text-lg" />
+          </label>
+          <button type="submit" className="btn btn-primary">Agregar clase</button>
+        </form>
+      </section>
+    </div>
   );
 }
