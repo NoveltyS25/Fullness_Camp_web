@@ -643,3 +643,18 @@ test("el pensum de Hatha trae el Laboratorio de asanas con 8 clases, y queda a n
   await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Lila Govardhan", email: "AcademicoFullnessCamp@fullnesscamp.com", role: "teacher" }, "http://localhost:3000");
   assert.equal((await listClasses(db)).find((c) => c.title === "Laboratorio de asanas")!.teacher_name, "Lila Govardhan");
 });
+
+// ---------------------------------------------------------------- Fundamentos del yoga (Lila): 8 clases
+
+test("el pensum de Hatha trae Fundamentos del yoga (Lila, 8 clases) al inicio de su módulo, antes de Anatomía y el Laboratorio", async () => {
+  const { db } = await classesSetup();
+  const modules = await getPensum(db, HATHA);
+  const mod = modules.find((m) => m.title === "Fundamentos del yoga" && m.classes.length > 1)!;
+  assert.deepEqual(mod.classes.map((c) => c.title), ["Fundamentos del yoga", ANATOMIA, "Laboratorio de asanas"]);
+  const lessons = await getClassLessons(db, mod.classes[0].class_id);
+  assert.equal(lessons.length, 8);
+  assert.match(lessons[5].title, /Yoga Nidra/);
+  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Lila Govardhan", email: "academicofullnesscamp@fullnesscamp.com", role: "teacher" }, "http://localhost:3000");
+  const lila = (await listClasses(db)).filter((c) => c.teacher_name === "Lila Govardhan").map((c) => c.title).sort();
+  assert.deepEqual(lila, ["Fundamentos del yoga", "Laboratorio de asanas"]);
+});

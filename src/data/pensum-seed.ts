@@ -104,6 +104,22 @@ export const ANATOMIA_BIOMECANICA: SeedClass = {
   ],
 };
 
+/** Fundamentos del yoga (Lila Govardhan): 8 clases. El temario de cada una llega después; Lila lo agrega si quiere. */
+export const FUNDAMENTOS_DEL_YOGA: SeedClass = {
+  title: "Fundamentos del yoga",
+  teacherEmail: "academicofullnesscamp@fullnesscamp.com",
+  lessons: [
+    { title: "Clase 1: Prakriti", topics: [] },
+    { title: "Clase 2: La estructura del ser", topics: [] },
+    { title: "Clase 3: Anna Yoga, yoga de la alimentación", topics: [] },
+    { title: "Clase 4: Principios de alineación", topics: [] },
+    { title: "Clase 5: Respiración", topics: [] },
+    { title: "Clase 6: Yoga Nidra", topics: [] },
+    { title: "Clase 7: Vinyasa", topics: [] },
+    { title: "Clase 8: Secuenciación", topics: [] },
+  ],
+};
+
 /** Laboratorio de asanas (Lila Govardhan): 8 clases. El temario de cada una llega después; Lila lo agrega si quiere. */
 export const LABORATORIO_ASANAS: SeedClass = {
   title: "Laboratorio de asanas",
@@ -155,8 +171,8 @@ export const PENSUM_SEED: Record<string, SeedModule[]> = {
   "hatha-vinyasa-yoga-y-meditacion": [
     ...FILOSOFIA_DEL_YOGA,
     {
-      title: "Anatomía y asanas",
-      topics: [ANATOMIA_BIOMECANICA, LABORATORIO_ASANAS],
+      title: "Fundamentos del yoga",
+      topics: [FUNDAMENTOS_DEL_YOGA, ANATOMIA_BIOMECANICA, LABORATORIO_ASANAS],
     },
     {
       title: "Cuerpo energético",
