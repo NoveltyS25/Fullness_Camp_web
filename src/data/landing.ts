@@ -25,6 +25,13 @@ export interface Fact {
   detail?: string;
 }
 
+export interface FaqItem {
+  q: string;
+  a: string;
+  /** Enlace opcional al documento que respalda la respuesta (por ejemplo, un PDF de política). */
+  link?: { label: string; href: string };
+}
+
 export interface Landing {
   /** Frase corta sobre el título (tipo de programa y duración). */
   kicker: string;
@@ -46,7 +53,7 @@ export interface Landing {
   schedule: { title: string; lines: string[] }[];
   includes: string[];
   requirements: string[];
-  faq: { q: string; a: string }[];
+  faq: FaqItem[];
   /** Si hay revista (flipbook) generada en public/revistas/<slug>. */
   magazine: boolean;
   testimonials?: Testimonial[];
@@ -109,6 +116,11 @@ export const SITE_TESTIMONIALS: Testimonial[] = [RESENAS.camila, RESENAS.adriana
 
 // ------------------------------------------------------------------ preguntas comunes
 
+const FAQ_CANCELACION: FaqItem = {
+  q: "¿Qué pasa si necesito cancelar o retirarme?",
+  a: "Toda cancelación o retiro debe notificarse por escrito. Las condiciones de reembolso dependen del momento en que cancelas (antes o después de iniciar el programa) y están detalladas en la política de matrícula y reembolso.",
+  link: { label: "Leer la política de matrícula y reembolso (PDF)", href: "/politicas/politica-de-matricula-y-reembolso.pdf" },
+};
 const FAQ_PAGO = {
   q: "¿Cómo pago y puedo hacerlo en cuotas?",
   a: "Pagas el valor completo en un solo pago con tarjeta y recibes un descuento por pago único. Si prefieres cuotas, puedes diferir el pago con tu banco al pagar con tu tarjeta de crédito.",
@@ -221,6 +233,7 @@ export const LANDINGS: Record<string, Landing> = {
     faq: [
       { q: "¿Qué diploma recibo?", a: "Un diploma internacional avalado por Yoga Alliance, que te permite dar clases y guiar la práctica de otras personas." },
       FAQ_PAGO,
+      FAQ_CANCELACION,
       FAQ_DESPUES,
       FAQ_LESION,
       FAQ_ASESORA,
@@ -316,6 +329,7 @@ export const LANDINGS: Record<string, Landing> = {
     faq: [
       { q: "¿Qué obtengo al terminar?", a: "Una doble titulación en yoga y pilates, con aval internacional. Si cumples con todo, después de graduarte puedes seguir asistiendo a las clases activas de la escuela durante todo el año sin costo." },
       FAQ_PAGO,
+      FAQ_CANCELACION,
       FAQ_DESPUES,
       FAQ_LESION,
       FAQ_ASESORA,
@@ -384,6 +398,7 @@ export const LANDINGS: Record<string, Landing> = {
       { q: "¿Es solo para profesoras de yoga?", a: "No. Es ideal para profesores de preescolar y primaria, psicólogos, pediatras, fisioterapeutas y cuidadores, así como para quien quiera acercarse al yoga con niños." },
       { q: "¿Qué recibo al terminar?", a: "Un diploma internacional con doble titulación: Yoga Kids y Yoga Prenatal." },
       FAQ_PAGO,
+      FAQ_CANCELACION,
       FAQ_DESPUES,
       FAQ_ASESORA,
     ],
@@ -443,6 +458,7 @@ export const LANDINGS: Record<string, Landing> = {
       { q: "¿El taller es solo para mujeres?", a: "No. Está diseñado para parejas: mamá y papá (o acompañante). La presencia activa de la pareja es parte fundamental del proceso." },
       { q: "¿Reemplaza el curso psicoprofiláctico?", a: "El taller abarca los contenidos del curso convencional psicoprofiláctico, y además suma yoga, meditación y respiración en cada sesión." },
       FAQ_PAGO,
+      FAQ_CANCELACION,
       FAQ_DESPUES,
       FAQ_ASESORA,
     ],

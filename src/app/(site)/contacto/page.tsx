@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/contacto" },
 };
 
-const faqs = [
+const faqs: { q: string; a: string; link?: { label: string; href: string } }[] = [
   {
     q: "¿Necesito experiencia previa para tomar las clases o certificaciones?",
     a: "No. Creemos que el yoga es para todas las personas. Nuestros programas son multinivel: nuestras docentes (médicas y fisioterapeutas) adaptan la práctica tanto para quienes inician desde cero como para estudiantes avanzadas.",
@@ -29,6 +29,19 @@ const faqs = [
     a: "Puedes ver los valores en la página de programas y pagar en línea, o escribirnos por WhatsApp para que una asesora te guíe en la elección del programa.",
   },
 ];
+
+faqs.push(
+  {
+    q: "¿Cómo funcionan la matrícula, la cancelación y los reembolsos?",
+    a: "Toda cancelación o retiro se notifica por escrito. Las condiciones dependen de cuándo cancelas, antes o después de iniciar el programa.",
+    link: { label: "Leer la política de matrícula y reembolso (PDF)", href: "/politicas/politica-de-matricula-y-reembolso.pdf" },
+  },
+  {
+    q: "¿Cómo presento una queja o una denuncia?",
+    a: "Nuestras políticas de quejas, anti-acoso y anti-represalias explican cómo presentarla, qué información debe incluir, los plazos y cómo protegemos la confidencialidad de quien la presenta.",
+    link: { label: "Leer la política de quejas (PDF)", href: "/politicas/politica-de-quejas.pdf" },
+  },
+);
 
 export default function Contacto() {
   const jsonLd = {
@@ -57,6 +70,7 @@ export default function Contacto() {
               <span aria-hidden="true" className="text-2xl transition group-open:rotate-45">+</span>
             </summary>
             <p className="mt-3">{f.a}</p>
+            {f.link && <p className="mt-3"><a href={f.link.href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">{f.link.label}</a></p>}
           </details>
         ))}
       </div>

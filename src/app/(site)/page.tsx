@@ -4,8 +4,10 @@ import Link from "next/link";
 import { Photo } from "@/components/home/Photo";
 import { FactGlyph } from "@/components/landing/FactGlyph";
 import { Reviews } from "@/components/Reviews";
+import { YogaAllianceBadges } from "@/components/YogaAllianceBadges";
 import { SITE_TESTIMONIALS, TEAM, getLanding, type FactIcon } from "@/data/landing";
 import { getProgram, isPurchasable } from "@/data/programs";
+import { YOGA_ALLIANCE_URL } from "@/data/politicas";
 import { SEDES } from "@/data/sedes";
 import { PAY_IN_FULL_PERCENT, formatCOP } from "@/lib/pricing";
 import { WHATSAPP_GENERAL } from "@/lib/whatsapp";
@@ -59,11 +61,17 @@ const CARD_PHOTO_POSITION: Record<string, string> = { "certificacion-de-yoga-kid
 
 const GALLERY: { src: string; alt: string; w: number; h: number }[] = [
   { src: "/images/2026_03_IMG_7965.jpg", alt: "Grupo practicando yoga en el domo geodésico de Tabío, con la imagen de Buda al fondo", w: 800, h: 1422 },
-  { src: "/images/2026_04_IMG_9119.jpg", alt: "Grupo en posturas de pie sobre el piso de madera de la sede de Bogotá", w: 1000, h: 563 },
+  { src: "/images/2026_04_IMG_9093-scaled.jpg", alt: "Dos personas estirando juntas sobre el piso de madera de la sede de Bogotá", w: 800, h: 1422 },
   { src: "/images/2026_04_IMG_2847-scaled.jpg", alt: "Estudiante en postura de descanso frente a una ventana amplia en Cajicá", w: 800, h: 1422 },
   { src: "/images/2026_03_IMG_7639.jpg", alt: "Estudiante en una postura invertida dentro del domo de Tabío", w: 800, h: 1422 },
   { src: "/images/2026_04_IMG_4755-scaled.jpg", alt: "Dos personas estirando juntas en el salón de Cajicá", w: 800, h: 1422 },
   { src: "/images/2026_04_IMG_9104.jpg", alt: "Mujer meditando con un bloque de yoga en la sede de Bogotá", w: 800, h: 1422 },
+  { src: "/images/drive_bogota_respiracion.jpg", alt: "Dos estudiantes con la mano en el corazón durante una práctica de respiración en Bogotá", w: 1012, h: 1800 },
+  { src: "/images/drive_cajica_arcos.jpg", alt: "Dos personas practicando de pie frente a los arcos del salón de Cajicá", w: 1012, h: 1800 },
+  { src: "/images/drive_bogota_arbol.jpg", alt: "Grupo en postura del árbol en el salón luminoso de Bogotá", w: 1012, h: 1800 },
+  { src: "/images/drive_cajica_loto.jpg", alt: "Estudiante en postura de meditación frente a la ventana en Cajicá", w: 1012, h: 1800 },
+  { src: "/images/drive_bogota_meditacion.jpg", alt: "Estudiante meditando con las manos en oración en la sede de Bogotá", w: 1012, h: 1800 },
+  { src: "/images/drive_cajica_equilibrio.jpg", alt: "Práctica de equilibrio en el salón con luz cálida de Cajicá", w: 1012, h: 1800 },
 ];
 
 const FEATURED = ["hatha-vinyasa-yoga-y-meditacion", "certificacion-de-yoga-y-pilates", "certificacion-de-yoga-kids"];
@@ -136,10 +144,15 @@ export default async function Home() {
               <Photo src="/images/2026_04_IMG_9106-scaled.jpg" alt="Estudiantes practicando respiración consciente en la sede de Bogotá" position="35% 60%" sizes="(min-width: 1024px) 200px, 40vw" className="col-span-2 rounded-b-3xl rounded-t-[999px]" />
               <Photo src="/images/2026_04_IMG_2898-scaled.jpg" alt="Mujer en postura de meditación en el salón de la sede de Cajicá" position="50% 40%" sizes="(min-width: 1024px) 200px, 40vw" className="col-span-2 rounded-t-3xl rounded-b-[999px]" />
             </div>
-            <p className="absolute -bottom-4 left-3 flex items-center gap-2 rounded-2xl bg-white px-4 py-3 font-medium text-clay-dark shadow-xl ring-1 ring-clay-soft sm:left-6">
-              <span aria-hidden="true" className="grid h-8 w-8 place-items-center rounded-full bg-clay-soft"><FactGlyph name="award" /></span>
-              Escuela registrada · Yoga Alliance
-            </p>
+            <a
+              href={YOGA_ALLIANCE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="absolute -bottom-5 left-3 flex items-center gap-3 rounded-2xl bg-white py-2 pl-2 pr-4 font-medium text-clay-dark shadow-xl ring-1 ring-clay-soft transition hover:scale-[1.03] sm:left-6"
+            >
+              <Image src="/brand/rys200-naranja.png" alt="" width={56} height={56} />
+              <span className="leading-tight">Escuela registrada<span className="block text-sm font-normal text-muted">RYS 200 · Yoga Alliance</span></span>
+            </a>
           </div>
         </div>
       </section>
@@ -154,6 +167,23 @@ export default async function Home() {
             </div>
           ))}
         </dl>
+      </section>
+
+      {/* 2b. Garantía: registro verificable en Yoga Alliance */}
+      <section aria-labelledby="garantia-t" className="bg-clay-soft py-14 sm:py-20">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-8 px-5 text-center md:flex-row md:text-left">
+          <YogaAllianceBadges size={132} className="md:order-none" />
+          <div className="flex-1">
+            <p className="mb-2 font-medium uppercase tracking-widest text-clay-dark">Nuestra garantía</p>
+            <h2 id="garantia-t" className="mb-3 text-3xl font-bold sm:text-4xl">Escuela registrada en Yoga Alliance</h2>
+            <p className="mb-6 text-lg text-ink">
+              Fullness Camp es una escuela registrada (RYS 200) en Yoga Alliance, la organización internacional de referencia en la formación de
+              instructores de yoga. Quienes se gradúan de nuestros programas reciben una certificación internacional avalada. Compruébalo tú
+              misma en el perfil público de la escuela.
+            </p>
+            <a href={YOGA_ALLIANCE_URL} target="_blank" rel="noopener noreferrer" className="btn btn-primary">Verificar nuestro perfil en Yoga Alliance</a>
+          </div>
+        </div>
       </section>
 
       {/* 3. Más que una escuela */}
@@ -264,16 +294,14 @@ export default async function Home() {
       <section aria-labelledby="galeria-t" className="bg-white py-16 sm:py-24">
         <div className="mx-auto max-w-6xl px-5">
           <SectionTitle id="galeria-t" kicker="Vive la experiencia" sub="Momentos reales de nuestras clases en las tres sedes.">Así se practica en Fullness Camp</SectionTitle>
-          <ul className="columns-2 gap-4 md:columns-3 md:gap-5">
+          <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-5">
             {GALLERY.map((g, i) => (
-              <li key={g.src} className="mb-4 break-inside-avoid md:mb-5">
-                <Image
+              <li key={g.src}>
+                <Photo
                   src={g.src}
                   alt={g.alt}
-                  width={g.w}
-                  height={g.h}
                   sizes="(min-width: 768px) 360px, 45vw"
-                  className={`h-auto w-full object-cover shadow-md ${i % 3 === 0 ? "rounded-t-[999px] rounded-b-3xl" : "rounded-3xl"}`}
+                  className={`aspect-[3/4] shadow-md ${i % 3 === 0 ? "rounded-b-3xl rounded-t-[999px]" : "rounded-3xl"}`}
                 />
               </li>
             ))}

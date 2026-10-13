@@ -7,6 +7,7 @@ import { startCheckoutAction, type CheckoutState } from "@/app/(site)/checkout/a
 import { TrackEvent } from "@/components/landing/TrackEvent";
 import { track } from "@/lib/analytics";
 import { readAttribution } from "@/lib/attribution";
+import { politica } from "@/data/politicas";
 import { useCart } from "@/lib/cart";
 import { formatCOP } from "@/lib/pricing";
 
@@ -71,7 +72,11 @@ export function CheckoutForm() {
 
         <label className="flex gap-3 text-lg">
           <input type="checkbox" name="terms" required className="mt-1 h-6 w-6 shrink-0 accent-[#7a4a45]" />
-          <span>Acepto los términos y condiciones y la política de privacidad. <span className="text-muted">(Los textos legales se publicarán antes del lanzamiento.)</span></span>
+          <span>
+            He leído y acepto la <a href={politica("reembolso").href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">política de matrícula y reembolso</a> y
+            la <a href={politica("asistencia").href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">política de asistencia</a>.
+            <span className="block text-sm text-muted">Los términos y la política de tratamiento de datos se publicarán antes del lanzamiento.</span>
+          </span>
         </label>
 
         <button type="submit" disabled={pending} className="btn btn-primary w-full">

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { Landing } from "@/data/landing";
+import { politica } from "@/data/politicas";
 import { isPurchasable, type Program } from "@/data/programs";
 import { itemParams } from "@/lib/analytics";
 import type { MagazineManifest } from "@/lib/magazine";
@@ -233,6 +234,7 @@ export function ProgramLanding({ program, landing, magazine, googleReviews }: { 
             <div className="rounded-3xl border border-clay-soft bg-white p-7">
               <h3 className="mb-4 text-2xl font-bold">Para graduarte</h3>
               <ul className="list-disc space-y-3 pl-6 text-lg">{landing.requirements.map((r) => <li key={r}>{r}</li>)}</ul>
+              <p className="mt-5"><a href={politica("asistencia").href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">Leer la política de asistencia (PDF)</a></p>
             </div>
           )}
         </div>
@@ -280,6 +282,7 @@ export function ProgramLanding({ program, landing, magazine, googleReviews }: { 
                 <span aria-hidden="true" className="text-2xl transition group-open:rotate-45">+</span>
               </summary>
               <p className="mt-3 text-lg">{f.a}</p>
+              {f.link && <p className="mt-3"><a href={f.link.href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">{f.link.label}</a></p>}
             </details>
           ))}
         </div>
