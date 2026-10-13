@@ -32,6 +32,7 @@ export function SiteFooter() {
             {POLITICAS.map((p) => (
               <li key={p.key}><a href={p.href} target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:underline">{p.title}</a></li>
             ))}
+            <li><Link href="/quejas" className="font-medium underline underline-offset-4">Presentar una queja o denuncia</Link></li>
           </ul>
         </div>
 

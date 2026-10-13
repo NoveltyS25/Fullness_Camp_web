@@ -44,9 +44,16 @@ sedes de Tabío, Cajicá y Bogotá, con la calificación real y el número de re
 - [ ] **Términos y condiciones** y **política de tratamiento de datos personales** (Ley 1581 de 2012: se recogen cédula, correo y teléfono). Hoy los formularios dicen que se publicarán.
 - [ ] Política de cookies y aviso de consentimiento antes de instalar analítica o píxeles.
 - [ ] Revisar con una abogada la política de matrícula y reembolso frente al **derecho de retracto** del Estatuto del Consumidor (Ley 1480 de 2011) para ventas a distancia.
-- [ ] Resolver las contradicciones de la política de matrícula (ver el análisis entregado): plan de financiación vs. pago único, y «depósito no reembolsable» vs. «el depósito se devolverá completamente».
+- [ ] Preguntar a la abogada sobre la política de matrícula y reembolso (ver los párrafos exactos en el chat): la contradicción del depósito (no reembolsable vs. se devuelve completo) y si el reembolso cambia según el tipo de curso. El «plan de financiamiento» no aplica a la web: se puede quitar del PDF.
 - [ ] Verificar que lo que se anuncia (200 h, 300 h, 500 h, Kids, Prenatal) coincide con las credenciales visibles en el perfil de Yoga Alliance de la escuela.
 - [ ] Actualizar el nombre legal en [src/lib/brand.ts](../src/lib/brand.ts).
+
+## 5b. Quejas y denuncias (/quejas) — PEDIR AL CLIENTE
+
+- [ ] **El correo al que deben llegar las quejas y denuncias** (el que revisa el «órgano de revisión»: Recursos Humanos o la dirección). Se pone en la variable `COMPLAINTS_EMAIL`. El aviso solo trae el radicado y el tipo; el detalle se lee en el panel `/campus/admin/quejas` (solo administradoras).
+- [ ] Confirmar quién integra el órgano de revisión y que esa persona tenga cuenta de administradora.
+- [ ] Revisar con la abogada: la política dice que una denuncia **anónima** puede desestimarse, por eso el formulario pide nombre y correo. Si quieren aceptar anónimas, hay que cambiar la política y el formulario.
+- [ ] Las políticas prometen revisar en 30 días hábiles; el panel marca «Plazo vencido». Alguien debe revisarlo con frecuencia.
 
 ## 6. Medición y buscadores
 

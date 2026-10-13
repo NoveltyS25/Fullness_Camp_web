@@ -131,6 +131,27 @@ export function manualAccountEmail(i: { fullName: string; cedula: string; setPas
   });
 }
 
+/** Acuse de recibo para quien presenta una queja. No repite el contenido: solo el número de radicado. */
+export function complaintReceivedEmail(i: { fullName: string; code: string; days: number }) {
+  const name = firstName(i.fullName);
+  const subject = `Recibimos tu solicitud (radicado ${i.code})`;
+  const text = `Hola ${name},\n\nRecibimos tu queja o denuncia. Tu número de radicado es ${i.code}; guárdalo para cualquier consulta.\n\nSerá tratada de forma confidencial. En un plazo de ${i.days} días hábiles te informaremos si fue aceptada para evaluación o desestimada, con sus razones. Nadie puede tomar represalias contra ti por presentarla de buena fe.\n\n${BRAND}`;
+  const html = wrap(
+    `<h1 style="color:#7a4a45;font-size:24px">Recibimos tu solicitud</h1><p>Hola ${esc(name)}, tu número de radicado es:</p><p style="font-size:24px;font-weight:bold;color:#7a4a45">${esc(i.code)}</p><p>Guárdalo para cualquier consulta. Será tratada de forma <strong>confidencial</strong>. En un plazo de ${i.days} días hábiles te informaremos si fue aceptada para evaluación o desestimada, con sus razones.</p><p>Nadie puede tomar represalias contra ti por presentarla de buena fe.</p>`,
+  );
+  return { subject, text, html };
+}
+
+/** Aviso al correo de quejas. A propósito NO incluye el contenido: se lee solo dentro del panel de administración. */
+export function complaintStaffEmail(i: { code: string; kindLabel: string; panelUrl: string }) {
+  const subject = `Nueva queja o denuncia (${i.code})`;
+  const text = `Llegó una nueva solicitud: ${i.kindLabel}. Radicado ${i.code}.\n\nPor confidencialidad, el detalle solo se ve en el panel (ingresa como administradora): ${i.panelUrl}\n\n${BRAND}`;
+  const html = wrap(
+    `<h1 style="color:#7a4a45;font-size:24px">Nueva queja o denuncia</h1><p>${esc(i.kindLabel)}. Radicado <strong>${esc(i.code)}</strong>.</p><p>Por confidencialidad, el detalle solo se ve dentro del panel de administración.</p>${button(i.panelUrl, "Abrir el panel")}`,
+  );
+  return { subject, text, html };
+}
+
 export function leadEmail(i: { fullName: string; programTitle: string; interest: "info" | "waitlist"; programUrl: string; whatsappUrl: string }) {
   const name = firstName(i.fullName);
   const waitlist = i.interest === "waitlist";

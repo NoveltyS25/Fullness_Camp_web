@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ActionForm, inputClass } from "@/components/campus/ActionForm";
 import { programs } from "@/data/programs";
 import { listCohorts, listStaff } from "@/server/campus";
+import { countOpenComplaints } from "@/server/complaints";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
 import { createCohortAction, createStaffAction, setRoleAction } from "./actions";
@@ -16,13 +17,16 @@ export default async function Admin() {
   if (!user || user.role !== "admin") redirect("/campus");
 
   const db = getDb();
-  const [cohorts, staff] = await Promise.all([listCohorts(db), listStaff(db)]);
+  const [cohorts, staff, openComplaints] = await Promise.all([listCohorts(db), listStaff(db), countOpenComplaints(db)]);
 
   return (
     <div className="space-y-14">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl font-bold sm:text-4xl">Administración</h1>
-        <Link href="/campus/admin/interesadas" className="btn btn-secondary">Personas interesadas</Link>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/campus/admin/interesadas" className="btn btn-secondary">Personas interesadas</Link>
+          <Link href="/campus/admin/quejas" className="btn btn-secondary">Quejas y denuncias{openComplaints > 0 ? ` (${openComplaints})` : ""}</Link>
+        </div>
       </div>
 
       <section aria-labelledby="cohortes">

@@ -39,7 +39,7 @@ faqs.push(
   {
     q: "¿Cómo presento una queja o una denuncia?",
     a: "Nuestras políticas de quejas, anti-acoso y anti-represalias explican cómo presentarla, qué información debe incluir, los plazos y cómo protegemos la confidencialidad de quien la presenta.",
-    link: { label: "Leer la política de quejas (PDF)", href: "/politicas/politica-de-quejas.pdf" },
+    link: { label: "Presentar una queja o denuncia de forma confidencial", href: "/quejas" },
   },
 );
 

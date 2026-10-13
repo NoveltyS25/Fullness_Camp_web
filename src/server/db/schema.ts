@@ -168,6 +168,30 @@ CREATE TABLE IF NOT EXISTS leads (
 CREATE INDEX IF NOT EXISTS leads_created_idx ON leads (created_at);
 CREATE INDEX IF NOT EXISTS leads_ip_idx ON leads (ip_hash, created_at);
 
+-- Quejas y denuncias (política de quejas, anti-acoso y anti-represalias). Información confidencial: solo la ve la administración.
+-- due_at = fecha límite (30 días hábiles) para aceptar o desestimar la queja, según la política. De la IP solo se guarda un hash.
+CREATE TABLE IF NOT EXISTS complaints (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('queja', 'acoso', 'represalia', 'otra')),
+  full_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  accused TEXT NOT NULL,
+  description TEXT NOT NULL,
+  event_date TEXT,
+  event_place TEXT,
+  witnesses TEXT,
+  status TEXT NOT NULL DEFAULT 'recibida' CHECK (status IN ('recibida', 'en_revision', 'aceptada', 'desestimada', 'cerrada')),
+  due_at TEXT NOT NULL,
+  resolution TEXT,
+  updated_at TEXT NOT NULL,
+  ip_hash TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS complaints_status_idx ON complaints (status, created_at);
+CREATE INDEX IF NOT EXISTS complaints_ip_idx ON complaints (ip_hash, created_at);
+
 -- Registro de TODO lo que el sistema envía (correos y WhatsApp). Sirve de auditoría y, en modo
 -- demostración, de "bandeja" para ver los mensajes sin enviarlos de verdad.
 CREATE TABLE IF NOT EXISTS outbox (

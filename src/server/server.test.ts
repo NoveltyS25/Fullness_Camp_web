@@ -298,3 +298,31 @@ test("reseñas de Google: si todo falla devuelve null", async () => {
   const r = await fetchGoogleReviews({ apiKey: "k", fetcher: () => Promise.resolve(new Response("x", { status: 403 })) });
   assert.equal(r, null);
 });
+
+// ---------------------------------------------------------------- quejas y denuncias
+
+import { addBusinessDays, createComplaint, listComplaints, updateComplaint } from "./complaints.ts";
+
+const complaint = { kind: "acoso" as const, fullName: "Ana Ruiz", email: "Ana@Example.com", phone: null, accused: "Docente X", description: "Descripción de lo ocurrido con detalle suficiente.", eventDate: null, eventPlace: null, witnesses: null, ip: "9.9.9.9" };
+
+test("una queja recibe radicado, queda confidencial en el panel y tiene plazo de 30 días hábiles", async () => {
+  const db = await setup();
+  const r = await createComplaint(db, complaint);
+  assert.ok(r.ok && /^Q-\d{8}-[A-Z0-9]{5}$/.test(r.code));
+  const [row] = await listComplaints(db);
+  assert.equal(row.status, "recibida");
+  assert.equal(row.email, "ana@example.com");
+  assert.ok(new Date(row.due_at).getTime() > Date.now() + 40 * 24 * 3600_000); // 30 hábiles ≥ 42 días corridos
+  assert.equal(await updateComplaint(db, row.id, "desestimada", "No está en el alcance."), true);
+  assert.equal((await listComplaints(db))[0].status, "desestimada");
+});
+
+test("quejas: máximo 3 por hora desde la misma conexión", async () => {
+  const db = await setup();
+  for (let i = 0; i < 3; i++) assert.equal((await createComplaint(db, complaint)).ok, true);
+  assert.deepEqual(await createComplaint(db, complaint), { ok: false, error: "rate-limited" });
+});
+
+test("los días hábiles saltan sábados y domingos", () => {
+  assert.equal(addBusinessDays(new Date("2026-10-09T12:00:00Z"), 1).toISOString().slice(0, 10), "2026-10-12"); // viernes → lunes
+});
