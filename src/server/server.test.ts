@@ -670,3 +670,19 @@ test("el pensum de Hatha trae la parte de Ayurveda de Lila (4 clases) y conserva
   assert.deepEqual(lessons.map((l) => l.title), ["Clase 1: Generalidades del Ayurveda", "Clase 2: Dinacharya y Ratricharya", "Clase 3: Doshas", "Clase 4: Alimentación"]);
   assert.equal((await listClasses(db)).some((c) => c.title === "Doshas y gunas"), false);
 });
+
+// ---------------------------------------------------------------- Marketing digital (Paula): 6 clases
+
+test("el pensum de Hatha trae Marketing digital (6 clases con tema y objetivo práctico) en «El yoga como camino de vida»", async () => {
+  const { db } = await classesSetup();
+  const mod = (await getPensum(db, HATHA)).find((m) => m.title === "El yoga como camino de vida")!;
+  const marketing = mod.classes.find((c) => c.title === "Marketing digital")!;
+  assert.ok(marketing, "va en ese módulo");
+  const lessons = await getClassLessons(db, marketing.class_id);
+  assert.equal(lessons.length, 6);
+  assert.deepEqual(lessons.map((l) => l.title.split(":")[1].trim()), ["Fundamentos", "Audiencia", "Contenido", "Ecosistema Meta", "Bases de pauta", "Lanzamiento"]);
+  assert.ok(lessons.every((l) => l.topics.length === 2 && l.topics[1].startsWith("Objetivo práctico:")));
+  // se asigna a la cuenta de Paula por su correo de administración
+  await createStaffAccount(db, { role: "admin" }, { cedula: "1010231015", fullName: "Paula Salazar", email: "noveltystudioscolombia@gmail.com", role: "admin" }, "http://localhost:3000");
+  assert.equal((await listClasses(db)).find((c) => c.title === "Marketing digital")!.teacher_name, "Paula Salazar");
+});

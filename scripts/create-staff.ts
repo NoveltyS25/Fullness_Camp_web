@@ -9,6 +9,7 @@
  * Variable BASE_URL para la dirección del enlace (por defecto http://localhost:3000).
  */
 import { createStaffAccount } from "../src/server/campus.ts";
+import { claimSuggestedClasses } from "../src/server/classes.ts";
 import { getDb } from "../src/server/db/index.ts";
 import { getTeacherProfile, saveTeacherProfile } from "../src/server/curriculum.ts";
 import { normalizeCedula } from "../src/server/security.ts";
@@ -37,6 +38,7 @@ const db = getDb();
 const existing = cedula ? await findUserByCedula(db, cedula) : undefined;
 if (existing) {
   await db.run("UPDATE users SET role = ?, email = ?, full_name = ?, must_change_password = 0 WHERE id = ?", [role, email.toLowerCase(), name, existing.id]);
+  await claimSuggestedClasses(db, existing.id, email);
   const link = await createSetupLink(db, existing.id, baseUrl);
   await sendEmail(db, { to: email.toLowerCase(), ...manualAccountEmail({ fullName: name, cedula: cedula!, setPasswordUrl: link, programTitle: null, loginUrl: `${baseUrl}/campus/ingresar`, recoverUrl: `${baseUrl}/campus/recuperar` }) });
   console.log(`Cuenta existente actualizada: ${name} → ${role}, correo ${email}`);

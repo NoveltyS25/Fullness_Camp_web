@@ -121,6 +121,59 @@ export const FUNDAMENTOS_DEL_YOGA: SeedClass = {
 };
 
 /**
+ * Marketing digital (Paula Salazar): 6 clases. Cada una trae su tema principal y su objetivo práctico.
+ * Se asigna por el correo de su cuenta de administración.
+ */
+export const MARKETING_DIGITAL: SeedClass = {
+  title: "Marketing digital",
+  teacherEmail: "noveltystudioscolombia@gmail.com",
+  lessons: [
+    {
+      title: "Clase 1: Fundamentos",
+      topics: [
+        "El marketing digital en el bienestar y la marca personal",
+        "Objetivo práctico: definir el propósito de tu marca (comercial o personal) y entender la diferencia entre vender y conectar",
+      ],
+    },
+    {
+      title: "Clase 2: Audiencia",
+      topics: [
+        "El cliente ideal (avatar) y la propuesta de valor",
+        "Objetivo práctico: identificar a quién le hablas (por ejemplo, yoga para el estrés vs. yoga para deportistas) y qué problema resuelves",
+      ],
+    },
+    {
+      title: "Clase 3: Contenido",
+      topics: [
+        "Estrategia de contenidos y pilares de comunicación",
+        "Objetivo práctico: crear una parrilla básica de contenido orgánico usando formatos clave (reels, historias, publicaciones educativas)",
+      ],
+    },
+    {
+      title: "Clase 4: Ecosistema Meta",
+      topics: [
+        "Introducción a Meta Business Suite",
+        "Objetivo práctico: configurar correctamente tu página de Facebook y tu cuenta profesional de Instagram, y entender dónde vive cada herramienta",
+      ],
+    },
+    {
+      title: "Clase 5: Bases de pauta",
+      topics: [
+        "Administrador de Anuncios vs. el botón «Promocionar»",
+        "Objetivo práctico: conocer la estructura de una campaña (campaña, conjunto de anuncios y anuncio) y los principios de segmentación",
+      ],
+    },
+    {
+      title: "Clase 6: Lanzamiento",
+      topics: [
+        "Creación de campaña y lectura de métricas clave",
+        "Objetivo práctico: configurar una campaña real de tráfico o interacción con un presupuesto mínimo y aprender a leer los resultados",
+      ],
+    },
+  ],
+};
+
+/**
  * Ayurveda se dicta entre dos docentes: esta es la parte de Lila Govardhan (4 clases). La otra parte se agrega cuando se sepa quién la da.
  */
 export const AYURVEDA_LILA: SeedClass = {
@@ -224,7 +277,7 @@ export const PENSUM_SEED: Record<string, SeedModule[]> = {
     },
     {
       title: "El yoga como camino de vida",
-      topics: ["El yoga como fuente de ingresos y de servicio"],
+      topics: ["El yoga como fuente de ingresos y de servicio", MARKETING_DIGITAL],
     },
   ],
 };
