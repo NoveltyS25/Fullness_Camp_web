@@ -29,6 +29,8 @@ export async function createClassAction(_prev: FormState, fd: FormData): Promise
     title: text(fd, "title"),
     modality: text(fd, "modality"),
     description: text(fd, "description"),
+    // En el panel de docente la clase es siempre de quien la crea (también si es administradora).
+    teacherId: user.id,
     startsAt: start,
     endsAt: end,
     weeks: Number.parseInt(text(fd, "weeks"), 10),

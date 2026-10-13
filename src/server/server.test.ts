@@ -488,6 +488,14 @@ test("crear una clase con su horario la deja de una vez en el calendario de la d
   assert.equal(sessions[0].online_url, "https://meet.google.com/abc-defg-hij");
 });
 
+test("una administradora que crea una clase desde su panel de docente la ve en su calendario", async () => {
+  const { db, admin } = await classesSetup();
+  const r = await createClassWithSessions(db, admin, { ...newClass, teacherId: admin.id });
+  assert.ok(r.ok);
+  assert.equal((await getTeacherSessionsBetween(db, admin.id, "2099-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z")).length, 2);
+  assert.equal((await listClasses(db))[0].teacher_name, "Admin");
+});
+
 test("crear una clase: todos los campos son obligatorios, según la modalidad", async () => {
   const { db, t1 } = await classesSetup();
   const fails = async (patch: Partial<typeof newClass>) => (await createClassWithSessions(db, t1, { ...newClass, ...patch })).ok === false;
