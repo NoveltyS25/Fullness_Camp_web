@@ -55,6 +55,19 @@ sedes de Tabío, Cajicá y Bogotá, con la calificación real y el número de re
 - [ ] Revisar con la abogada: la política dice que una denuncia **anónima** puede desestimarse, por eso el formulario pide nombre y correo. Si quieren aceptar anónimas, hay que cambiar la política y el formulario.
 - [ ] Las políticas prometen revisar en 30 días hábiles; el panel marca «Plazo vencido». Alguien debe revisarlo con frecuencia.
 
+## 5c. Bienvenida a las docentes al campus (enviar SOLO al pasar a producción)
+
+Los correos están en `data/profes-correos.txt` (carpeta ignorada por git: no se suben a GitHub). Faltan los de **Lila Govardhan** y **William Feragotto**.
+El correo de Paula Salazar sirve para pruebas y también es docente real.
+
+- [ ] **Diseñar el correo de bienvenida y mostrarlo antes de enviar** (se aprueba el diseño; no se envía nada hasta producción).
+- [ ] El correo dice: bienvenida al campus virtual de Fullness Camp, entrar con el enlace para **crear su contraseña**, y que el **primer paso** es registrar sus clases y horarios y a qué certificación corresponde cada clase.
+- [ ] Crear las cuentas de profesora (rol `teacher`) con su correo y cédula (el ingreso es cédula + contraseña: **pedir la cédula de cada docente**).
+- [ ] Perfil de la docente en el campus: **foto** (subir imagen) y nombre/cargo.
+- [ ] Sección «Clases grabadas» por docente: pegan enlaces (por ahora de Google Meet) y se abren en **una ventana nueva** sin salir del campus.
+- [ ] Paso a paso de primer ingreso para la docente: 1) crear contraseña, 2) subir foto, 3) registrar clases y horarios por certificación, 4) agregar enlaces de grabaciones.
+- [ ] Desarrollo pendiente en el campus (se hace antes de producción): subida de foto de perfil, enlaces de grabaciones por clase y asignación de clases a una certificación por la propia docente.
+
 ## 6. Medición y buscadores
 
 - [ ] Google Search Console (verificar el dominio, enviar `/sitemap.xml`; ya hay un archivo de verificación en el sitio anterior).
