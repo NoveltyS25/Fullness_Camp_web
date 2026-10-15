@@ -118,8 +118,8 @@ export const SITE_TESTIMONIALS: Testimonial[] = [RESENAS.camila, RESENAS.adriana
 
 const FAQ_CANCELACION: FaqItem = {
   q: "¿Qué pasa si necesito cancelar o retirarme?",
-  a: "Toda cancelación o retiro debe notificarse por escrito. Las condiciones de reembolso dependen del momento en que cancelas (antes o después de iniciar el programa) y están detalladas en la política de matrícula y reembolso.",
-  link: { label: "Leer la política de matrícula y reembolso (PDF)", href: "/politicas/politica-de-matricula-y-reembolso.pdf" },
+  a: "Tienes derecho de retracto de 5 días hábiles en compras a distancia, y toda cancelación o retiro debe notificarse por escrito. Las condiciones de reembolso dependen del momento en que cancelas (antes o después de iniciar el programa) y están detalladas en la política general y en la política de profesorados y formaciones de larga duración.",
+  link: { label: "Leer la política general de matrícula, cancelación y reembolso (PDF)", href: "/politicas/politica-general-de-matricula-cancelacion-y-reembolso.pdf" },
 };
 const FAQ_PAGO = {
   q: "¿Cómo pago y puedo hacerlo en cuotas?",

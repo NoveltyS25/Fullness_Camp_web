@@ -43,10 +43,9 @@ sedes de Tabío, Cajicá y Bogotá, con la calificación real y el número de re
 
 - [ ] **Términos y condiciones** y **política de tratamiento de datos personales** (Ley 1581 de 2012: se recogen cédula, correo y teléfono). Hoy los formularios dicen que se publicarán.
 - [ ] Política de cookies y aviso de consentimiento antes de instalar analítica o píxeles.
-- [ ] Revisar con una abogada la política de matrícula y reembolso frente al **derecho de retracto** del Estatuto del Consumidor (Ley 1480 de 2011) para ventas a distancia.
-- [ ] Preguntar a la abogada sobre la política de matrícula y reembolso (ver los párrafos exactos en el chat): la contradicción del depósito (no reembolsable vs. se devuelve completo) y si el reembolso cambia según el tipo de curso. El «plan de financiamiento» no aplica a la web: se puede quitar del PDF.
+- [ ] **Revisar con la abogada el contrato y las 6 políticas nuevas**: la lista de hallazgos y preguntas está en [POLITICAS-ANALISIS.md](POLITICAS-ANALISIS.md) (plazo de devolución de 15 días, cita del art. 47, retracto en retiros, exoneración de responsabilidad, datos de salud, finalidades de datos e imagen, cláusula penal).
 - [ ] Verificar que lo que se anuncia (200 h, 300 h, 500 h, Kids, Prenatal) coincide con las credenciales visibles en el perfil de Yoga Alliance de la escuela.
-- [ ] Actualizar el nombre legal en [src/lib/brand.ts](../src/lib/brand.ts).
+- [ ] Confirmar el nombre legal y el NIT (hoy «Fullness Camp Internacional», NIT 900771531, tomados del contrato) con el RUT y el certificado de Cámara de Comercio, y actualizarlos en [src/lib/brand.ts](../src/lib/brand.ts).
 
 ## 5b. Quejas y denuncias (/quejas) — PEDIR AL CLIENTE
 
@@ -68,6 +67,12 @@ El correo de Paula Salazar sirve para pruebas y también es docente real.
 - [ ] Paso a paso de primer ingreso para la docente: 1) crear contraseña, 2) subir foto, 3) registrar clases y horarios por certificación, 4) agregar enlaces de grabaciones.
 - [ ] Desarrollo pendiente en el campus (se hace antes de producción): subida de foto de perfil y enlaces de grabaciones por clase. Las docentes crean sus clases y horarios; la administración arma las certificaciones.
 - [ ] Editor para **crear certificaciones nuevas** desde el panel (hoy salen del catálogo de programas).
+
+## 5d. Aceptación del contrato y las políticas (por construir)
+
+- [ ] Registro de aceptación: casillas separadas (contrato y políticas, datos, salud, imagen, comunicaciones, inicio anticipado), evidencia guardada (versión exacta, fecha y hora, IP, navegador), copia por correo y aceptación dentro del campus para quienes ya están inscritas. Ver propuesta en [POLITICAS-ANALISIS.md](POLITICAS-ANALISIS.md).
+- [ ] Publicar la **política de tratamiento de datos personales**, el aviso de privacidad y la política de cookies; definir el correo oficial del dominio para solicitudes (hoy los documentos dicen fullnesscamp.bogota@gmail.com).
+- [ ] Decidir si se actualizan también las políticas de asistencia, anti-acoso, anti-represalias y quejas (siguen siendo las anteriores).
 
 ## 6. Medición y buscadores
 

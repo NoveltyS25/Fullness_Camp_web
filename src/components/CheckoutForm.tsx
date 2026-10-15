@@ -7,11 +7,21 @@ import { startCheckoutAction, type CheckoutState } from "@/app/(site)/checkout/a
 import { TrackEvent } from "@/components/landing/TrackEvent";
 import { track } from "@/lib/analytics";
 import { readAttribution } from "@/lib/attribution";
-import { politica } from "@/data/politicas";
+import { politica, POLITICA_POR_CATEGORIA, type PoliticaKey } from "@/data/politicas";
 import { useCart } from "@/lib/cart";
 import { formatCOP } from "@/lib/pricing";
 
 const input = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-4 text-lg";
+
+const POLITICA_LABEL: Record<string, string> = {
+  contrato: "el contrato de prestación de servicios",
+  general: "la política general de matrícula, cancelación y reembolso",
+  profesorados: "la política de profesorados y formaciones de larga duración",
+  talleres: "la política de talleres cortos",
+  retiros: "la política de retiros",
+  clases: "la política de clases sueltas y tiqueteras",
+  asistencia: "la política de asistencia",
+};
 
 const steps = [
   { n: 1, t: "Pagas con tarjeta", d: "En una página segura de pago." },
@@ -22,6 +32,10 @@ const steps = [
 export function CheckoutForm() {
   const { quote, slugs, couponCode } = useCart();
   const [state, action, pending] = useActionState<CheckoutState, FormData>(startCheckoutAction, {});
+
+  // Contrato y política general, la política específica de cada tipo de programa en el carrito, y la de asistencia.
+  const specific = [...new Set(quote.lines.map((l) => POLITICA_POR_CATEGORIA[l.category]))] as PoliticaKey[];
+  const accepted: PoliticaKey[] = ["contrato", "general", ...specific, "asistencia"];
 
   if (quote.lines.length === 0) {
     return (
@@ -73,9 +87,15 @@ export function CheckoutForm() {
         <label className="flex gap-3 text-lg">
           <input type="checkbox" name="terms" required className="mt-1 h-6 w-6 shrink-0 accent-[#7a4a45]" />
           <span>
-            He leído y acepto la <a href={politica("reembolso").href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">política de matrícula y reembolso</a> y
-            la <a href={politica("asistencia").href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">política de asistencia</a>.
-            <span className="block text-sm text-muted">Los términos y la política de tratamiento de datos se publicarán antes del lanzamiento.</span>
+            He leído y acepto{" "}
+            {accepted.map((k, i) => (
+              <span key={k}>
+                {i > 0 && (i === accepted.length - 1 ? " y " : ", ")}
+                <a href={politica(k).href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">{POLITICA_LABEL[k]}</a>
+              </span>
+            ))}
+            .
+            <span className="block text-sm text-muted">La política de tratamiento de datos personales se publicará antes del lanzamiento.</span>
           </span>
         </label>
 

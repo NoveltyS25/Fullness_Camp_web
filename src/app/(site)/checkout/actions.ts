@@ -25,7 +25,7 @@ export async function startCheckoutAction(_prev: CheckoutState, fd: FormData): P
   if (!cedula) return { error: "Escribe tu cédula (solo números, sin puntos)." };
   if (!EMAIL_RE.test(email)) return { error: "Escribe un correo válido: ahí te enviaremos el acceso." };
   if (rawPhone && !phone) return { error: "El número de WhatsApp no es válido. Ejemplo: 311 674 1900" };
-  if (fd.get("terms") !== "on") return { error: "Debes aceptar la política de matrícula y reembolso y la de asistencia para continuar." };
+  if (fd.get("terms") !== "on") return { error: "Debes aceptar el contrato y las políticas de matrícula, cancelación y reembolso para continuar." };
 
   let slugs: string[] = [];
   try {

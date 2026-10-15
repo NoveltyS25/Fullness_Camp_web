@@ -3,6 +3,7 @@ import Link from "next/link";
 import { YogaAllianceBadges } from "@/components/YogaAllianceBadges";
 import { POLITICAS } from "@/data/politicas";
 import { SEDES } from "@/data/sedes";
+import { LEGAL_NAME, NIT } from "@/lib/brand";
 import { WHATSAPP_GENERAL } from "@/lib/whatsapp";
 
 export function SiteFooter() {
@@ -27,9 +28,15 @@ export function SiteFooter() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="!text-white font-serif text-xl font-bold">Políticas</h2>
+          <h2 className="!text-white font-serif text-xl font-bold">Contrato y políticas</h2>
           <ul className="space-y-1">
-            {POLITICAS.map((p) => (
+            {POLITICAS.filter((p) => p.group === "matricula").map((p) => (
+              <li key={p.key}><a href={p.href} target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:underline">{p.title}</a></li>
+            ))}
+          </ul>
+          <h3 className="!text-white pt-2 font-serif text-lg font-bold">Convivencia y quejas</h3>
+          <ul className="space-y-1">
+            {POLITICAS.filter((p) => p.group === "convivencia").map((p) => (
               <li key={p.key}><a href={p.href} target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:underline">{p.title}</a></li>
             ))}
             <li><Link href="/quejas" className="font-medium underline underline-offset-4">Presentar una queja o denuncia</Link></li>
@@ -49,7 +56,7 @@ export function SiteFooter() {
         </div>
       </div>
       <p className="border-t border-white/20 px-5 py-5 text-center text-sm">
-        © {new Date().getFullYear()} Fullnes Camp International. Todos los derechos reservados.
+        © {new Date().getFullYear()} {LEGAL_NAME} · NIT {NIT}. Todos los derechos reservados.
       </p>
     </footer>
   );

@@ -37,7 +37,7 @@ se muestra en el sitio pero no se puede comprar.
 ## Otros pendientes
 
 - Políticas legales (términos, privacidad, reembolsos y cancelación): las enviará el equipo.
-- Nombre legal: hoy es "Fullnes Camp International" en [src/lib/brand.ts](../src/lib/brand.ts); se ajusta con las políticas.
+- Nombre legal: hoy es "Fullness Camp Internacional" (NIT 900771531, del contrato) en [src/lib/brand.ts](../src/lib/brand.ts); confirmar con el RUT.
 - Confirmar el aval que se mostrará: Yoga Alliance (RYS 200) o "Yoga Inbound Alliance", porque los PDF mencionan ambos.
 - Cuenta de Bold: llaves de API y si permite cobrar en USD.
 

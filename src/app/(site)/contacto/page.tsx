@@ -33,8 +33,8 @@ const faqs: { q: string; a: string; link?: { label: string; href: string } }[] =
 faqs.push(
   {
     q: "¿Cómo funcionan la matrícula, la cancelación y los reembolsos?",
-    a: "Toda cancelación o retiro se notifica por escrito. Las condiciones dependen de cuándo cancelas, antes o después de iniciar el programa.",
-    link: { label: "Leer la política de matrícula y reembolso (PDF)", href: "/politicas/politica-de-matricula-y-reembolso.pdf" },
+    a: "Tienes derecho de retracto de 5 días hábiles en compras a distancia, y toda cancelación o retiro se notifica por escrito. Las condiciones dependen del tipo de programa (formación, taller, retiro o clase suelta) y de cuándo cancelas.",
+    link: { label: "Leer la política general de matrícula, cancelación y reembolso (PDF)", href: "/politicas/politica-general-de-matricula-cancelacion-y-reembolso.pdf" },
   },
   {
     q: "¿Cómo presento una queja o una denuncia?",
