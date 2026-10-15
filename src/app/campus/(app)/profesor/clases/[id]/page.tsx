@@ -4,10 +4,11 @@ import { getProgram } from "@/data/programs";
 import { formatDay, formatRange } from "@/lib/campus/time";
 import { getClassSessions } from "@/server/campus";
 import { CHOICE_LABEL, PROGRESS_LABEL, PROGRESS_TONE, TEACHER_CHOICES } from "@/lib/campus/progress";
+import { listCoverCandidates, pendingCoverForClass } from "@/server/covers";
 import { getClassForActor, getClassLessons, getClassStudentsProgress, MODALITIES } from "@/server/classes";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
-import { addLessonAction, addSessionsAction, deleteClassAction, deleteLessonAction, scheduleLessonAction, setProgressAction, updateClassAction } from "../../actions";
+import { addLessonAction, addSessionsAction, deleteClassAction, deleteLessonAction, scheduleLessonAction, setProgressAction, updateClassAction, requestCoverAction, cancelCoverAction } from "../../actions";
 
 export const metadata = { title: "Mi clase" };
 
@@ -25,6 +26,7 @@ export default async function MiClase(props: PageProps<"/campus/profesor/clases/
   if (!c) notFound();
   const [sessions, students, lessons] = await Promise.all([getClassSessions(db, id, new Date().toISOString()), getClassStudentsProgress(db, id), getClassLessons(db, id)]);
   const error = one(q.error);
+  const [pendingCover, candidates] = await Promise.all([pendingCoverForClass(db, id), listCoverCandidates(db, user.id)]);
 
   return (
     <div className="space-y-12">
@@ -211,6 +213,39 @@ export default async function MiClase(props: PageProps<"/campus/profesor/clases/
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="suplencia" className="max-w-2xl border-t border-clay-soft pt-8">
+        <h2 id="suplencia" className="mb-2 text-2xl font-bold">Que otra docente te supla</h2>
+        <p className="mb-4 text-muted">
+          Si otra docente va a dar esta clase en tu lugar, envíale una solicitud. Cuando la acepte, la clase pasa a su nombre y puede cambiar los horarios. Las estudiantes <strong>no reciben aviso del cambio de docente</strong>, solo ven el nombre nuevo; sí reciben aviso si ella cambia una fecha u hora.
+        </p>
+        {pendingCover ? (
+          <div className="rounded-2xl bg-clay-soft p-4">
+            <p className="text-lg">Solicitud enviada a <strong>{pendingCover.to_name}</strong>: está pendiente de su respuesta.</p>
+            <form action={cancelCoverAction} className="mt-3">
+              <input type="hidden" name="class_id" value={c.id} />
+              <input type="hidden" name="request_id" value={pendingCover.id} />
+              <button type="submit" className="btn btn-secondary">Cancelar la solicitud</button>
+            </form>
+          </div>
+        ) : (
+          <form action={requestCoverAction} className="space-y-3">
+            <input type="hidden" name="class_id" value={c.id} />
+            <label className="block">
+              <span className="mb-1 block text-lg font-medium">Docente</span>
+              <select name="to_user" required className={field} defaultValue="">
+                <option value="" disabled>Elige a quién se la pides</option>
+                {candidates.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-lg font-medium">Mensaje <span className="font-normal text-muted">(opcional)</span></span>
+              <textarea name="message" rows={2} maxLength={500} className="w-full rounded-xl border-2 border-clay-soft bg-white p-3 text-lg" />
+            </label>
+            <button type="submit" className="btn btn-secondary">Enviar solicitud</button>
+          </form>
         )}
       </section>
 

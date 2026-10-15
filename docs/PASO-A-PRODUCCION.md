@@ -70,7 +70,9 @@ El correo de Paula Salazar sirve para pruebas y también es docente real.
 
 ## 5d. Aceptación del contrato y las políticas (por construir)
 
-- [ ] Registro de aceptación: casillas separadas (contrato y políticas, datos, salud, imagen, comunicaciones, inicio anticipado), evidencia guardada (versión exacta, fecha y hora, IP, navegador), copia por correo y aceptación dentro del campus para quienes ya están inscritas. Ver propuesta en [POLITICAS-ANALISIS.md](POLITICAS-ANALISIS.md).
+- [x] Registro de aceptación **ya construido**: casillas separadas, evidencia guardada, copia por correo y aceptación dentro del campus. Falta que la abogada revise los textos de las casillas (`src/components/AcceptanceFields.tsx`). Ver [POLITICAS-ANALISIS.md](POLITICAS-ANALISIS.md).
+- [ ] Corregir el NIT en el contrato PDF (dice 900771531; el NIT confirmado es 52259046-0).
+- [ ] Si algún programa se financia en cuotas: firma reforzada con código de un solo uso (OTP) o proveedor de firma electrónica certificada.
 - [ ] Publicar la **política de tratamiento de datos personales**, el aviso de privacidad y la política de cookies; definir el correo oficial del dominio para solicitudes (hoy los documentos dicen fullnesscamp.bogota@gmail.com).
 - [ ] Decidir si se actualizan también las políticas de asistencia, anti-acoso, anti-represalias y quejas (siguen siendo las anteriores).
 

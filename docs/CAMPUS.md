@@ -111,3 +111,15 @@ La administración marca el curso como terminado en la página de la cohorte (*M
 
 - Cada docente dicta su asignatura en un **ciclo** con fechas propias; por eso las asignaturas no se ven en el orden del pensum. *Mi avance* (`/campus/avance`) muestra, en el orden del pensum, qué asignaturas están **pendientes por tomar**, **en curso**, **aprobadas** o **no aprobadas**, cuándo inicia el ciclo de cada una, el total aprobado y la explicación de los ciclos a un lado.
 - Estados: *pendiente por tomar* hasta que empieza la primera clase de la asignatura; *en curso* automáticamente desde esa fecha. **Solo la docente de la asignatura** (no la administración ni la estudiante) puede marcar *en curso*, *aprobada* o *no aprobada*, o volver a lo automático, desde la página de la clase (*Estudiantes de esta clase*). Para graduarse hay que aprobar todas las asignaturas de la certificación (más la tesina y la confirmación de la escuela).
+
+## Suplencias entre docentes
+
+- Desde la página de una clase, su docente puede pedirle a otra docente (con registro completo) que la supla. La otra recibe un aviso en el campus y por correo, y ve la solicitud arriba en *Mis clases* para **aceptar o rechazar**.
+- Al aceptar, **la clase pasa a su nombre** de inmediato (la docente anterior recibe el aviso). Las **estudiantes no reciben aviso** del cambio de docente: solo ven el nombre nuevo. La nueva docente puede cambiar horarios y marcar resultados; los cambios de fecha u hora **sí** se avisan a las estudiantes.
+- Una sola solicitud pendiente por clase; quien la envió puede cancelarla. Si la clase cambió de docente mientras tanto, la solicitud se cancela.
+
+## Aceptación del contrato y las políticas
+
+- Al pagar, el checkout muestra casillas separadas: contrato y políticas del programa (obligatoria), datos (obligatoria), salud (obligatoria), inicio anticipado si el programa empieza en 5 días hábiles (obligatoria en ese caso), imagen y novedades (opcionales). Se guarda la evidencia en `acceptances` / `acceptance_documents` (huella SHA-256 de cada PDF, IP, navegador, fecha y hora) y el correo de bienvenida trae los enlaces como copia.
+- Una estudiante con un documento vigente sin aceptar (nueva, importada o por cambio de un PDF) es llevada a `/campus/aceptar` antes de ver nada. La página de cada cohorte indica si cada estudiante tiene todo aceptado.
+- Para actualizar un documento se reemplaza su PDF en `public/politicas/` con el mismo nombre: la huella cambia y se vuelve a pedir la aceptación.

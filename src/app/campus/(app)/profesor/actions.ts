@@ -5,8 +5,11 @@ import { redirect } from "next/navigation";
 import { fromLocalInput } from "@/lib/campus/time";
 import { addClassSessions, addLesson, createClassWithSessions, deleteClass, deleteLesson, scheduleLesson, setClassProgress, updateClass } from "@/server/classes";
 import type { FormState } from "@/app/campus/actions";
+import { cancelCover, requestCover, respondCover } from "@/server/covers";
 import { getDb } from "@/server/db";
-import { getCurrentUser } from "@/server/web";
+import { sendEmail } from "@/server/outbox";
+import { coverRequestEmail } from "@/server/templates";
+import { baseUrl, getCurrentUser } from "@/server/web";
 
 const text = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 
@@ -79,6 +82,47 @@ export async function setProgressAction(fd: FormData) {
   const r = await setClassProgress(getDb(), user, id, text(fd, "user_id"), text(fd, "status"));
   revalidatePath("/campus", "layout");
   back(`/campus/profesor/clases/${id}`, r.ok ? undefined : r.error);
+}
+
+/** Pide que otra docente supla la clase: ella recibe un aviso en el campus y por correo. */
+export async function requestCoverAction(fd: FormData) {
+  const user = await requireStaff();
+  const id = text(fd, "class_id");
+  const db = getDb();
+  const to = text(fd, "to_user");
+  const message = String(fd.get("message") ?? "");
+  const r = await requestCover(db, user, id, to, message);
+  if (r.ok) {
+    const info = await db.get<{ class_title: string; to_name: string; to_email: string; from_name: string }>(
+      `SELECT c.title AS class_title, t.full_name AS to_name, t.email AS to_email, f.full_name AS from_name
+       FROM classes c, users t, users f WHERE c.id = ? AND t.id = ? AND f.id = ?`,
+      [id, to, user.id],
+    );
+    if (info) {
+      await sendEmail(db, {
+        to: info.to_email,
+        ...coverRequestEmail({ toName: info.to_name, fromName: info.from_name, classTitle: info.class_title, message: message.trim() || null, url: `${await baseUrl()}/campus/profesor` }),
+      });
+    }
+  }
+  revalidatePath("/campus", "layout");
+  back(`/campus/profesor/clases/${id}`, r.ok ? undefined : r.error);
+}
+
+export async function cancelCoverAction(fd: FormData) {
+  const user = await requireStaff();
+  const id = text(fd, "class_id");
+  const r = await cancelCover(getDb(), user, text(fd, "request_id"));
+  revalidatePath("/campus", "layout");
+  back(`/campus/profesor/clases/${id}`, r.ok ? undefined : r.error);
+}
+
+/** La docente que recibió la solicitud la acepta o la rechaza. */
+export async function respondCoverAction(fd: FormData) {
+  const user = await requireStaff();
+  const r = await respondCover(getDb(), user, text(fd, "request_id"), text(fd, "decision") === "aceptar");
+  revalidatePath("/campus", "layout");
+  back("/campus/profesor", r.ok ? undefined : r.error);
 }
 
 export async function updateClassAction(fd: FormData) {

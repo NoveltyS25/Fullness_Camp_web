@@ -15,7 +15,7 @@ Se publicaron los 6 documentos nuevos y se borró el de «matrícula y reembolso
 | Política específica para retiros de fin de semana | `politica-retiros-de-fin-de-semana.pdf` |
 | Política específica para clases sueltas y tiqueteras | `politica-clases-sueltas-y-tiqueteras.pdf` |
 
-Siguen publicadas **sin cambios** las de asistencia, anti-acoso, anti-represalias y quejas (no llegó versión nueva; la política de quejas y las otras dos las usa la página `/quejas`). El pie de página, el checkout, las preguntas frecuentes y las landings ya apuntan a los documentos nuevos. El pie muestra ahora el nombre legal y el NIT del contrato: «Fullness Camp Internacional · NIT 900771531» (confirmar contra el RUT y el certificado de la Cámara de Comercio).
+Siguen publicadas **sin cambios** las de asistencia, anti-acoso, anti-represalias y quejas (no llegó versión nueva; la política de quejas y las otras dos las usa la página `/quejas`). El pie de página, el checkout, las preguntas frecuentes y las landings ya apuntan a los documentos nuevos. El pie muestra el nombre legal y el NIT que confirmó la escuela: «Fullness Camp Internacional · NIT 52259046-0». **El contrato PDF todavía dice «NIT 900771531»: hay que corregirlo para que coincida** (y confirmar con el RUT quién figura como titular).
 
 ## Hallazgos, de más a menos importante
 
@@ -48,6 +48,9 @@ Siguen publicadas **sin cambios** las de asistencia, anti-acoso, anti-represalia
 Retracto de 5 días hábiles con devolución del 100 % sin descuentos; devolución total si la escuela cancela; alternativas por fuerza mayor (saldo a favor, cesión, conversión); transferencia de cupo con autorización del tercero para sus datos; debido proceso antes de una expulsión; el contrato deja claro que lo específico prevalece sobre lo general.
 
 ## Cómo hacer que el estudiante «firme» o acepte
+
+> **Estado: implementado (octubre de 2026).** Casillas separadas en el checkout y en el campus, evidencia guardada (documentos con huella SHA-256, fecha y hora, IP, navegador y casillas marcadas), copia por correo al pagar, aceptación obligatoria dentro del campus la primera vez y cuando cambia un documento, e indicador en la página de cada cohorte. Los textos de las casillas son **provisionales** hasta que la abogada los revise (están en `src/components/AcceptanceFields.tsx`). Falta: política de tratamiento de datos publicada, y firma reforzada (OTP) si algún programa se financia en cuotas.
+
 
 **Recomendación: casilla robusta con evidencia guardada** (no solo un enlace con una casilla) y, solo donde haya financiación, una firma más fuerte.
 

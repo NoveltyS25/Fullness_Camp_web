@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ActionForm, inputClass } from "@/components/campus/ActionForm";
 import { programs } from "@/data/programs";
 import { getCohort, listCohortEnrollments } from "@/server/campus";
+import { missingDocuments } from "@/server/acceptance";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
 import { enrollManualAction, setCohortActiveAction, setCourseCompletedAction, setEnrollmentStatusAction } from "../../actions";
@@ -20,6 +21,8 @@ export default async function CohortePage(props: PageProps<"/campus/admin/cohort
   const cohort = await getCohort(db, id);
   if (!cohort) notFound();
   const enrollments = await listCohortEnrollments(db, id);
+  const pendingDocs = new Map<string, number>();
+  for (const e of enrollments) pendingDocs.set(e.user_id, (await missingDocuments(db, { id: e.user_id, cedula: e.cedula, role: "student" })).length);
 
   return (
     <div className="space-y-12">
@@ -44,7 +47,7 @@ export default async function CohortePage(props: PageProps<"/campus/admin/cohort
               <div>
                 <p className="text-lg font-bold">{e.full_name}</p>
                 <p className="text-muted">Cédula {e.cedula} · {e.email}{e.whatsapp_phone ? ` · WhatsApp ${e.whatsapp_phone}` : ""}</p>
-                <p className="text-sm font-medium text-clay-dark">{statusLabel[e.status]}{e.completed_at ? " · Curso terminado (certificado emitido)" : ""}</p>
+                <p className="text-sm font-medium text-clay-dark">{statusLabel[e.status]}{(pendingDocs.get(e.user_id) ?? 0) > 0 ? " · Contrato y políticas sin aceptar" : " · Contrato y políticas aceptados"}{e.completed_at ? " · Curso terminado (certificado emitido)" : ""}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {e.status === "active" && (

@@ -5,8 +5,10 @@ import { NewClassForm } from "@/components/campus/NewClassForm";
 import { currentMonth, monthRangeIso, parseMonth } from "@/lib/campus/calendar";
 import { getTeacherSessionsBetween } from "@/server/campus";
 import { getTeacherClasses, MODALITIES } from "@/server/classes";
+import { incomingCoverRequests } from "@/server/covers";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
+import { respondCoverAction } from "./actions";
 
 export const metadata = { title: "Mis clases" };
 
@@ -20,7 +22,7 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
   const { year, month } = parseMonth(one(q.mes)) ?? currentMonth();
   const range = monthRangeIso(year, month);
   const db = getDb();
-  const [sessions, classes] = await Promise.all([getTeacherSessionsBetween(db, user.id, range.from, range.to), getTeacherClasses(db, user.id)]);
+  const [sessions, classes, covers] = await Promise.all([getTeacherSessionsBetween(db, user.id, range.from, range.to), getTeacherClasses(db, user.id), incomingCoverRequests(db, user.id)]);
 
   const notified = one(q.guardado) === undefined ? null : Number(one(q.guardado));
   const error = one(q.error);
@@ -53,6 +55,26 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
         </p>
       )}
       {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-lg font-medium text-red-800">{error}</p>}
+
+      {covers.length > 0 && (
+        <section aria-labelledby="suplencias" className="rounded-3xl border-2 border-clay-dark bg-white p-6">
+          <h2 id="suplencias" className="mb-3 text-2xl font-bold">Te piden que suplas una clase</h2>
+          <ul className="space-y-4">
+            {covers.map((r) => (
+              <li key={r.id} className="rounded-2xl bg-clay-soft p-4">
+                <p className="text-lg"><strong>{r.from_name}</strong> te pide que la suplas en <strong>«{r.class_title}»</strong>.</p>
+                {r.message && <p className="mt-1 text-muted">«{r.message}»</p>}
+                <p className="mt-1 text-muted">Si aceptas, la clase pasa a tu nombre y podrás poner y cambiar sus horarios. Las estudiantes no reciben aviso de este cambio.</p>
+                <form action={respondCoverAction} className="mt-3 flex flex-wrap gap-3">
+                  <input type="hidden" name="request_id" value={r.id} />
+                  <button type="submit" name="decision" value="aceptar" className="btn btn-primary">Aceptar</button>
+                  <button type="submit" name="decision" value="rechazar" className="btn btn-secondary">Rechazar</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <MonthCalendar year={year} month={month} sessions={sessions} basePath="/campus/profesor" />
 

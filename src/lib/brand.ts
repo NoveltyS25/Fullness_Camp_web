@@ -1,7 +1,7 @@
-/** Nombre legal de la escuela según su contrato (confirmar que coincida con el RUT y el certificado de Cámara de Comercio). */
+/** Nombre legal de la escuela. */
 export const LEGAL_NAME = "Fullness Camp Internacional";
-/** NIT que figura en el contrato de prestación de servicios (confirmar el dígito de verificación). */
-export const NIT = "900771531";
+/** NIT con dígito de verificación. (El contrato PDF todavía dice 900771531: corregirlo para que coincida.) */
+export const NIT = "52259046-0";
 /** Domicilio principal según el contrato. */
 export const LEGAL_CITY = "Tabio, Cundinamarca";
 /** Nombre comercial que se muestra en el sitio. */

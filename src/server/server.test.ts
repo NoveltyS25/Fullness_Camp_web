@@ -746,3 +746,150 @@ test("el avance es automático (pendiente antes del ciclo, en curso después) y 
   await setClassProgress(db, t1, empezada, stu.id, "automatico");
   assert.equal((await status("Empezada")).status, "en_curso");
 });
+
+// ---------------------------------------------------------------- aceptación del contrato y las políticas, con evidencia
+
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { POLITICAS } from "../data/politicas.ts";
+import { expectedDocumentKeys, expectedKeysFor, linkAcceptanceToUser, missingDocuments, recordAcceptance, startsWithinRetractWindow } from "./acceptance.ts";
+
+/** Carpeta public falsa con un PDF por documento, para probar cambios de versión sin tocar los reales. */
+function fakePublic(version: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "fc-pub-"));
+  mkdirSync(join(dir, "politicas"));
+  for (const p of POLITICAS) writeFileSync(join(dir, p.href), `${p.key}:${version}`);
+  return dir;
+}
+
+const consents = { data: true, health: true, image: false, marketing: false, early_start: false };
+const who = (u: { id: string; cedula: string; email: string; full_name: string }) => ({ userId: u.id, cedula: u.cedula, email: u.email, fullName: u.full_name });
+
+test("los documentos que aplican dependen de lo que la persona compra", () => {
+  assert.deepEqual(expectedDocumentKeys(["certificacion"]), ["contrato", "general", "profesorados", "asistencia"]);
+  assert.deepEqual(expectedDocumentKeys(["certificacion", "taller", "taller"]), ["contrato", "general", "profesorados", "talleres", "asistencia"]);
+  assert.deepEqual(expectedDocumentKeys(["retiro"]), ["contrato", "general", "retiros", "asistencia"]);
+});
+
+test("aceptar guarda la evidencia y deja al día a la estudiante; si un PDF cambia, vuelve a faltar solo ese", async () => {
+  const { db, stu, t1 } = await classesSetup();
+  await enroll(db, stu.id, HATHA);
+  const dir = fakePublic("v1");
+  assert.deepEqual(await missingDocuments(db, stu, dir), ["contrato", "general", "profesorados", "asistencia"]);
+  assert.deepEqual(await missingDocuments(db, t1, dir), [], "las docentes no firman el contrato de estudiantes");
+
+  const keys = await expectedKeysFor(db, stu);
+  const id = await recordAcceptance(db, { ...who({ ...stu, full_name: "Estudiante" }), orderId: null, context: "campus", keys, consents, ip: "1.2.3.4", userAgent: "Prueba/1.0", publicDir: dir });
+  assert.deepEqual(await missingDocuments(db, stu, dir), []);
+  const row = await db.get<{ ip: string; consents: string }>("SELECT ip, consents FROM acceptances WHERE id = ?", [id]);
+  assert.equal(row?.ip, "1.2.3.4");
+  assert.equal(JSON.parse(row!.consents).health, true);
+  const docs = await db.all<{ sha256: string }>("SELECT sha256 FROM acceptance_documents WHERE acceptance_id = ?", [id]);
+  assert.equal(docs.length, 4);
+  assert.ok(docs.every((d) => /^[0-9a-f]{64}$/.test(d.sha256)));
+
+  writeFileSync(join(dir, "politicas/politica-general-de-matricula-cancelacion-y-reembolso.pdf"), "general:v2");
+  assert.deepEqual(await missingDocuments(db, stu, dir), ["general"], "cambió un documento: debe aceptarlo de nuevo");
+});
+
+test("la aceptación hecha por cédula en el checkout cuenta cuando se crea la cuenta", async () => {
+  const { db } = await classesSetup();
+  const dir = fakePublic("v1");
+  const order = await createOrder(db, { cedula: buyer.cedula, name: buyer.name, email: buyer.email, phone: null }, [SLUG], null, "demo");
+  assert.ok(order.ok);
+  const orderId = order.ok ? order.orderId : "";
+  await recordAcceptance(db, { userId: null, cedula: buyer.cedula, email: buyer.email, fullName: buyer.name, orderId, context: "checkout", keys: expectedDocumentKeys(["certificacion"]), consents, ip: "9.9.9.9", userAgent: "x", publicDir: dir });
+  await completeOrder(db, orderId, "ref", "http://localhost:3000");
+  const user = (await findUserByCedula(db, buyer.cedula))!;
+  const link = await db.get<{ user_id: string | null }>("SELECT user_id FROM acceptances WHERE order_id = ?", [orderId]);
+  assert.equal(link?.user_id, user.id, "quedó ligada a la cuenta");
+  assert.deepEqual(await missingDocuments(db, user, dir), [], "no vuelve a pedirle lo que ya aceptó al pagar");
+  const mail = await lastEmail(db, buyer.email);
+  assert.match(mail!.body_text, /Documentos que aceptaste/);
+  assert.match(mail!.body_text, /politica-general-de-matricula-cancelacion-y-reembolso\.pdf/);
+  void linkAcceptanceToUser;
+});
+
+test("si el programa empieza dentro de 5 días hábiles se pide el consentimiento de inicio anticipado", async () => {
+  const db = await setup(); // grupo de Hatha que empieza en 2099
+  assert.equal(await startsWithinRetractWindow(db, [SLUG]), false);
+  const soon = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+  await db.run("INSERT INTO cohorts (id, program_slug, name, sede, starts_on, active, created_at) VALUES (?, ?, 'Pronto', 'Online', ?, 1, ?)", [newId(), SLUG, soon, nowIso()]);
+  assert.equal(await startsWithinRetractWindow(db, [SLUG]), true);
+  assert.equal(await startsWithinRetractWindow(db, ["certificacion-de-yoga-kids"]), false);
+});
+
+// ---------------------------------------------------------------- suplencias entre docentes
+
+import { cancelCover, incomingCoverRequests, listCoverCandidates, requestCover, respondCover } from "./covers.ts";
+
+async function coverSetup() {
+  const s = await classesSetup();
+  const made = await createClass(s.db, s.t1, { title: "Marketing", modality: "virtual", description: "" });
+  const classId = made.ok ? made.id : "";
+  await placeClass(s.db, s.admin, (await getPensum(s.db, HATHA))[0].id, classId);
+  await addClassSessions(s.db, s.t1, { classId, title: "", ...FUTURE, weeks: 2, location: null, onlineUrl: null });
+  await enroll(s.db, s.stu.id, HATHA);
+  return { ...s, classId };
+}
+
+const notifCount = async (db: Db, userId: string) => Number((await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ?", [userId]))?.n);
+
+test("suplencia: al aceptarla la clase cambia de docente, las estudiantes no reciben aviso y la nueva docente puede mover horarios", async () => {
+  const { db, t1, t2, stu, classId } = await coverSetup();
+  assert.equal((await requestCover(db, t2, classId, t1.id, "")).ok, false, "solo la docente de la clase la puede pedir");
+  assert.equal((await requestCover(db, t1, classId, t1.id, "")).ok, false, "no a sí misma");
+  assert.equal((await requestCover(db, t1, classId, stu.id, "")).ok, false, "no a una estudiante");
+  assert.deepEqual(await requestCover(db, t1, classId, t2.id, "Voy a viajar esas semanas"), { ok: true });
+  assert.equal((await requestCover(db, t1, classId, t2.id, "")).ok, false, "una sola solicitud pendiente por clase");
+
+  const inbox = await incomingCoverRequests(db, t2.id);
+  assert.equal(inbox.length, 1);
+  assert.equal(inbox[0].class_title, "Marketing");
+  assert.equal(await notifCount(db, t2.id), 1, "la docente recibe aviso en el campus");
+
+  const studentBefore = await notifCount(db, stu.id);
+  assert.equal((await respondCover(db, t1, inbox[0].id, true)).ok, false, "solo quien recibió puede responder");
+  assert.deepEqual(await respondCover(db, t2, inbox[0].id, true), { ok: true });
+  assert.equal((await listClasses(db)).find((c) => c.id === classId)!.teacher_name, "Docente Dos");
+  assert.equal(await notifCount(db, stu.id), studentBefore, "las estudiantes NO reciben aviso del cambio de docente");
+  assert.equal(await notifCount(db, t1.id), 1, "quien la pidió sí se entera de que aceptó");
+  assert.equal((await respondCover(db, t2, inbox[0].id, true)).ok, false, "no se puede responder dos veces");
+
+  // la nueva docente cambia un horario: eso SÍ se avisa a las estudiantes; la anterior ya no puede
+  const [first] = await getStudentSessions(db, stu.id);
+  assert.equal((await rescheduleSession(db, t1, { sessionId: first.id, startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: null, onlineUrl: null, status: "cancelled", reason: "Ya no es mía" })).ok, false);
+  const moved = await rescheduleSession(db, t2, { sessionId: first.id, startsAt: "2099-04-01T23:00:00.000Z", endsAt: "2099-04-02T01:00:00.000Z", location: null, onlineUrl: null, status: "scheduled", reason: "Nuevo horario" });
+  assert.deepEqual(moved, { ok: true, notified: 1 });
+  assert.equal(await notifCount(db, stu.id), studentBefore + 1);
+});
+
+test("suplencia: rechazar o cancelar deja la clase como estaba; no se pide a docentes sin registro completo", async () => {
+  const { db, t1, t2, classId } = await coverSetup();
+  await requestCover(db, t1, classId, t2.id, "");
+  const [req] = await incomingCoverRequests(db, t2.id);
+  assert.deepEqual(await respondCover(db, t2, req.id, false), { ok: true });
+  assert.equal((await listClasses(db)).find((c) => c.id === classId)!.teacher_id, t1.id);
+  assert.equal(await notifCount(db, t1.id), 1);
+
+  await requestCover(db, t1, classId, t2.id, "");
+  const [again] = await incomingCoverRequests(db, t2.id);
+  assert.equal((await cancelCover(db, t2, again.id)).ok, false, "solo quien la envió la cancela");
+  assert.deepEqual(await cancelCover(db, t1, again.id), { ok: true });
+  assert.equal((await incomingCoverRequests(db, t2.id)).length, 0);
+
+  // docente invitada que aún no completa su registro: no aparece como candidata
+  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Laura Pendiente", email: "laura@x.co", role: "teacher" }, "http://localhost:3000");
+  const names = (await listCoverCandidates(db, t1.id)).map((c) => c.full_name);
+  assert.ok(names.includes("Docente Dos") && !names.includes("Laura Pendiente") && !names.includes("Docente Uno"));
+});
+
+test("suplencia: si la clase cambió de docente mientras tanto, la solicitud se cancela al aceptar", async () => {
+  const { db, admin, t1, t2, classId } = await coverSetup();
+  await requestCover(db, t1, classId, t2.id, "");
+  const [req] = await incomingCoverRequests(db, t2.id);
+  await updateClass(db, admin, classId, { title: "Marketing", modality: "virtual", description: "", teacherId: admin.id });
+  assert.equal((await respondCover(db, t2, req.id, true)).ok, false);
+  assert.equal((await listClasses(db)).find((c) => c.id === classId)!.teacher_id, admin.id);
+});

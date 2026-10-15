@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { missingDocuments } from "@/server/acceptance";
 import { unreadCount } from "@/server/campus";
 import { getDb } from "@/server/db";
 import { isPendingCedula } from "@/server/users";
@@ -42,7 +43,10 @@ export default async function CampusLayout({ children }: LayoutProps<"/campus">)
   // Docente que aún no completó su registro: primero sus datos.
   if (user.role !== "student" && isPendingCedula(user.cedula)) redirect("/campus/bienvenida-docente");
 
-  const unread = await unreadCount(getDb(), user.id);
+  const db = getDb();
+  // Estudiante con un contrato o una política vigente sin aceptar: primero los acepta.
+  if (user.role === "student" && (await missingDocuments(db, user)).length > 0) redirect("/campus/aceptar");
+  const unread = await unreadCount(db, user.id);
 
   return (
     <>

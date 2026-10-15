@@ -7,21 +7,12 @@ import { startCheckoutAction, type CheckoutState } from "@/app/(site)/checkout/a
 import { TrackEvent } from "@/components/landing/TrackEvent";
 import { track } from "@/lib/analytics";
 import { readAttribution } from "@/lib/attribution";
-import { politica, POLITICA_POR_CATEGORIA, type PoliticaKey } from "@/data/politicas";
+import { AcceptanceFields } from "@/components/AcceptanceFields";
+import { POLITICA_POR_CATEGORIA, type PoliticaKey } from "@/data/politicas";
 import { useCart } from "@/lib/cart";
 import { formatCOP } from "@/lib/pricing";
 
 const input = "min-h-14 w-full rounded-xl border-2 border-clay-soft bg-white px-4 text-lg";
-
-const POLITICA_LABEL: Record<string, string> = {
-  contrato: "el contrato de prestación de servicios",
-  general: "la política general de matrícula, cancelación y reembolso",
-  profesorados: "la política de profesorados y formaciones de larga duración",
-  talleres: "la política de talleres cortos",
-  retiros: "la política de retiros",
-  clases: "la política de clases sueltas y tiqueteras",
-  asistencia: "la política de asistencia",
-};
 
 const steps = [
   { n: 1, t: "Pagas con tarjeta", d: "En una página segura de pago." },
@@ -29,12 +20,14 @@ const steps = [
   { n: 3, t: "Entras con tu cédula", d: "Y con la contraseña que creaste ves tus clases." },
 ];
 
-export function CheckoutForm() {
+export function CheckoutForm({ earlyStartSlugs = [] }: { earlyStartSlugs?: string[] }) {
   const { quote, slugs, couponCode } = useCart();
   const [state, action, pending] = useActionState<CheckoutState, FormData>(startCheckoutAction, {});
 
   // Contrato y política general, la política específica de cada tipo de programa en el carrito, y la de asistencia.
   const specific = [...new Set(quote.lines.map((l) => POLITICA_POR_CATEGORIA[l.category]))] as PoliticaKey[];
+  // Si algún programa del carrito empieza dentro de los 5 días hábiles del retracto, se pide el consentimiento de inicio anticipado.
+  const earlyStart = quote.lines.some((l) => earlyStartSlugs.includes(l.slug));
   const accepted: PoliticaKey[] = ["contrato", "general", ...specific, "asistencia"];
 
   if (quote.lines.length === 0) {
@@ -84,20 +77,7 @@ export function CheckoutForm() {
           <p id="wa-help" className="mt-1 text-muted">Para avisarte si cambia el horario de una clase.</p>
         </div>
 
-        <label className="flex gap-3 text-lg">
-          <input type="checkbox" name="terms" required className="mt-1 h-6 w-6 shrink-0 accent-[#7a4a45]" />
-          <span>
-            He leído y acepto{" "}
-            {accepted.map((k, i) => (
-              <span key={k}>
-                {i > 0 && (i === accepted.length - 1 ? " y " : ", ")}
-                <a href={politica(k).href} target="_blank" rel="noopener noreferrer" className="font-medium text-clay-dark underline">{POLITICA_LABEL[k]}</a>
-              </span>
-            ))}
-            .
-            <span className="block text-sm text-muted">La política de tratamiento de datos personales se publicará antes del lanzamiento.</span>
-          </span>
-        </label>
+        <AcceptanceFields keys={accepted} earlyStart={earlyStart} />
 
         <button type="submit" disabled={pending} className="btn btn-primary w-full">
           {pending ? "Preparando tu pago…" : `Ir a pagar ${formatCOP(quote.total)}`}

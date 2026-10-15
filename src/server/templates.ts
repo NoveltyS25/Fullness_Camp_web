@@ -28,6 +28,8 @@ export interface WelcomeInput {
   payment: { orderId: string; total: number } | null;
   loginUrl: string;
   recoverUrl: string;
+  /** Documentos que aceptó al pagar (copia para la estudiante). */
+  documents?: { title: string; url: string }[];
 }
 
 export function welcomeEmail(i: WelcomeInput): { subject: string; text: string; html: string } {
@@ -67,6 +69,7 @@ export function welcomeEmail(i: WelcomeInput): { subject: string; text: string; 
     ...(isNew ? stepsNew : stepsExisting),
     "",
     isNew ? `Si el enlace venció, entra a ${i.recoverUrl} con tu cédula y tu correo y te enviamos otro.` : "",
+    ...(i.documents?.length ? ["", "Documentos que aceptaste al inscribirte (guárdalos):", ...i.documents.map((d) => `• ${d.title}: ${d.url}`)] : []),
     `${BRAND}`,
   ].join("\n");
 
@@ -93,7 +96,8 @@ export function welcomeEmail(i: WelcomeInput): { subject: string; text: string; 
       `${paymentLine ? `<span style="color:#5d4542">${esc(paymentLine)}</span>` : ""}</div>` : "") +
       `<h2 style="color:#7a4a45;font-size:22px;margin-top:28px">Cómo entrar a tu campus virtual</h2><ol style="padding-left:22px">${stepsHtml}</ol>` +
       (isNew ? button(i.setPasswordUrl!, "Crear mi contraseña") : button(i.loginUrl, "Entrar al campus virtual")) +
-      (isNew ? `<p style="color:#5d4542">Si el enlace venció, entra a <a href="${esc(i.recoverUrl)}">${esc(i.recoverUrl)}</a> con tu cédula y tu correo y te enviamos otro.</p>` : ""),
+      (isNew ? `<p style="color:#5d4542">Si el enlace venció, entra a <a href="${esc(i.recoverUrl)}">${esc(i.recoverUrl)}</a> con tu cédula y tu correo y te enviamos otro.</p>` : "") +
+      (i.documents?.length ? `<h2 style="color:#7a4a45;font-size:20px;margin-top:28px">Documentos que aceptaste al inscribirte</h2><ul>${i.documents.map((d) => `<li><a href="${esc(d.url)}">${esc(d.title)}</a></li>`).join("")}</ul><p style="color:#5d4542">Guarda este correo: es tu copia.</p>` : ""),
   );
 
   return { subject, text, html };
@@ -129,6 +133,17 @@ export function manualAccountEmail(i: { fullName: string; cedula: string; setPas
     loginUrl: i.loginUrl,
     recoverUrl: i.recoverUrl,
   });
+}
+
+/** Aviso a una docente de que otra le pide suplirla en una clase. */
+export function coverRequestEmail(i: { toName: string; fromName: string; classTitle: string; message: string | null; url: string }) {
+  const name = firstName(i.toName);
+  const subject = `${i.fromName} te pide que la supla en «${i.classTitle}»`;
+  const text = `Hola ${name},\n\n${i.fromName} te pide que la supla en la clase «${i.classTitle}».${i.message ? `\n\nMensaje: ${i.message}` : ""}\n\nPara aceptar o rechazar, entra a «Mis clases» en el campus: ${i.url}\n\nSi aceptas, la clase pasa a tu nombre y podrás poner o cambiar sus horarios. Las estudiantes no reciben aviso del cambio de docente, pero sí de cualquier cambio de fecha u hora que hagas.\n\n${BRAND}`;
+  const html = wrap(
+    `<h1 style="color:#7a4a45;font-size:24px">Solicitud de suplencia</h1><p>Hola ${esc(name)}, <strong>${esc(i.fromName)}</strong> te pide que la supla en la clase <strong>«${esc(i.classTitle)}»</strong>.</p>${i.message ? `<p style="background:#fbf6f3;border-radius:12px;padding:12px 16px">${esc(i.message)}</p>` : ""}${button(i.url, "Ver la solicitud")}<p style="color:#5d4542">Si aceptas, la clase pasa a tu nombre y podrás poner o cambiar sus horarios. Las estudiantes no reciben aviso del cambio de docente, pero sí de cualquier cambio de fecha u hora que hagas.</p>`,
+  );
+  return { subject, text, html };
 }
 
 /** Acuse de recibo para quien presenta una queja. No repite el contenido: solo el número de radicado. */

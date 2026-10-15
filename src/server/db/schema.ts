@@ -226,6 +226,48 @@ CREATE TABLE IF NOT EXISTS class_progress (
   PRIMARY KEY (user_id, class_id)
 );
 
+-- Aceptación del contrato y las políticas. Cada documento aceptado guarda la huella SHA-256 del PDF vigente en ese momento.
+-- consents = casillas marcadas (datos, salud, imagen, comunicaciones, inicio anticipado), en JSON.
+CREATE TABLE IF NOT EXISTS acceptances (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users (id) ON DELETE SET NULL,
+  cedula TEXT NOT NULL,
+  email TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  order_id TEXT REFERENCES orders (id) ON DELETE SET NULL,
+  context TEXT NOT NULL CHECK (context IN ('checkout', 'campus')),
+  consents TEXT NOT NULL,
+  ip TEXT,
+  user_agent TEXT,
+  accepted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS acceptances_user_idx ON acceptances (user_id);
+CREATE INDEX IF NOT EXISTS acceptances_cedula_idx ON acceptances (cedula);
+CREATE INDEX IF NOT EXISTS acceptances_order_idx ON acceptances (order_id);
+
+CREATE TABLE IF NOT EXISTS acceptance_documents (
+  acceptance_id TEXT NOT NULL REFERENCES acceptances (id) ON DELETE CASCADE,
+  doc_key TEXT NOT NULL,
+  title TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  PRIMARY KEY (acceptance_id, doc_key)
+);
+CREATE INDEX IF NOT EXISTS acceptance_documents_idx ON acceptance_documents (doc_key, sha256);
+
+-- Suplencias: una docente le pide a otra que la supla en una clase. Al aceptarla, la clase cambia de docente.
+CREATE TABLE IF NOT EXISTS class_cover_requests (
+  id TEXT PRIMARY KEY,
+  class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+  from_user TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  to_user TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  message TEXT,
+  status TEXT NOT NULL CHECK (status IN ('pendiente', 'aceptada', 'rechazada', 'cancelada')),
+  created_at TEXT NOT NULL,
+  resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS class_cover_to_idx ON class_cover_requests (to_user, status);
+CREATE INDEX IF NOT EXISTS class_cover_class_idx ON class_cover_requests (class_id, status);
+
 -- Para no volver a sembrar el pensum inicial de un programa si la administración lo borra a propósito.
 CREATE TABLE IF NOT EXISTS curriculum_seeded (
   program_slug TEXT PRIMARY KEY

@@ -2,6 +2,8 @@ import { getProgram } from "../data/programs.ts";
 import { priceCart } from "../lib/pricing.ts";
 import { newId, nowIso, type Db } from "./db/index.ts";
 import { createSetupLink } from "./auth.ts";
+import { acceptedDocumentsOfOrder, linkAcceptanceToUser } from "./acceptance.ts";
+import { politica } from "../data/politicas.ts";
 import { cleanAttribution } from "./leads.ts";
 import { sendEmail } from "./outbox.ts";
 import { generateTempPassword, hashPassword } from "./security.ts";
@@ -139,6 +141,7 @@ export async function completeOrder(db: Db, orderId: string, providerRef: string
       enrolled.push({ title: getProgram(item.program_slug)?.title ?? item.title, cohortName: cohort?.name ?? null });
     }
 
+    await linkAcceptanceToUser(tx, orderId, user.id);
     await tx.run("UPDATE orders SET status = 'paid', paid_at = ?, provider_ref = ?, user_id = ? WHERE id = ?", [
       nowIso(),
       providerRef,
@@ -160,6 +163,7 @@ export async function completeOrder(db: Db, orderId: string, providerRef: string
     payment: { orderId, total: order.total },
     loginUrl: `${baseUrl}/campus/ingresar`,
     recoverUrl: `${baseUrl}/campus/recuperar`,
+    documents: (await acceptedDocumentsOfOrder(db, orderId)).map((d) => ({ title: d.title, url: `${baseUrl}${politica(d.doc_key).href}` })),
   });
   await sendEmail(db, { to: user.email, ...welcome });
 

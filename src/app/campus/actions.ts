@@ -7,7 +7,8 @@ import { normalizeWhatsapp } from "@/lib/campus/phone";
 import { fromLocalInput } from "@/lib/campus/time";
 import { consumePasswordReset, createPasswordReset, createSession, login, peekPasswordReset } from "@/server/auth";
 import { markAllRead, processPendingDeliveries, rescheduleSession, updateProfile } from "@/server/campus";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { expectedKeysFor, recordAcceptance } from "@/server/acceptance";
 import { getTeacherProfile, saveTeacherProfile } from "@/server/curriculum";
 import { getDb } from "@/server/db";
 import { sendEmail } from "@/server/outbox";
@@ -190,6 +191,34 @@ export async function switchViewAction(fd: FormData) {
   if (!views.available.includes(wanted)) redirect(VIEW_HOME[views.current]);
   (await cookies()).set("fc_view", wanted, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 30 * 24 * 3600 });
   redirect(VIEW_HOME[wanted]);
+}
+
+/** Aceptación del contrato y las políticas desde el campus. Guarda la evidencia de lo que está vigente hoy. */
+export async function acceptDocumentsAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/campus/ingresar");
+  if (fd.get("accept_core") !== "on") return { error: "Debes aceptar el contrato y las políticas para continuar." };
+  if (fd.get("accept_data") !== "on") return { error: "Debes autorizar el tratamiento de tus datos personales para continuar." };
+  if (fd.get("accept_health") !== "on") return { error: "Marca la casilla de salud y práctica de yoga para continuar." };
+
+  const db = getDb();
+  const keys = await expectedKeysFor(db, user);
+  if (keys.length > 0) {
+    await recordAcceptance(db, {
+      userId: user.id,
+      cedula: user.cedula,
+      email: user.email,
+      fullName: user.full_name,
+      orderId: null,
+      context: "campus",
+      keys,
+      consents: { data: true, health: true, image: fd.get("accept_image") === "on", marketing: fd.get("accept_marketing") === "on", early_start: false },
+      ip: await clientIp(),
+      userAgent: (await headers()).get("user-agent") ?? "",
+    });
+  }
+  revalidatePath("/campus", "layout");
+  redirect("/campus");
 }
 
 export async function markAllReadAction() {
