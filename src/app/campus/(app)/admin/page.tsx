@@ -6,7 +6,7 @@ import { listCohorts, listStaff } from "@/server/campus";
 import { countOpenComplaints } from "@/server/complaints";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
-import { createCohortAction, createStaffAction, setRoleAction } from "./actions";
+import { createCohortAction, createStaffAction, setCanGradeAction, setRoleAction } from "./actions";
 
 export const metadata = { title: "Administración" };
 
@@ -81,15 +81,25 @@ export default async function Admin() {
         <h2 id="personas" className="text-2xl font-bold">Profesoras y administradoras</h2>
         <ul className="space-y-2">
           {staff.map((t) => (
-            <li key={t.id} className="rounded-2xl border border-clay-soft bg-white p-4 text-lg">
-              <strong>{t.full_name}</strong> · cédula {t.cedula} · <span className="text-muted">{roleLabel[t.role]}</span>
+            <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-clay-soft bg-white p-4 text-lg">
+              <span>
+                <strong>{t.full_name}</strong> · {t.cedula.startsWith("PEND-") ? "aún sin cédula (no ha completado su registro)" : `cédula ${t.cedula}`} · <span className="text-muted">{roleLabel[t.role]}</span>
+                {!t.can_grade && <span className="ml-2 rounded-full bg-clay-soft px-3 py-1 text-sm">Suplente: no aprueba estudiantes</span>}
+              </span>
+              <form action={setCanGradeAction}>
+                <input type="hidden" name="user_id" value={t.id} />
+                <input type="hidden" name="can_grade" value={t.can_grade ? "false" : "true"} />
+                <button type="submit" className="min-h-12 rounded-full px-4 font-medium text-clay-dark underline hover:bg-clay-soft">
+                  {t.can_grade ? "Hacerla suplente (no aprueba)" : "Permitirle aprobar estudiantes"}
+                </button>
+              </form>
             </li>
           ))}
         </ul>
 
         <div>
           <h3 className="mb-3 text-xl font-bold">Crear la cuenta de una profesora</h3>
-          <p className="mb-4 text-muted">Le llegará por correo el enlace para crear su contraseña. En su primer ingreso completa sus datos y elige sus certificaciones.</p>
+          <p className="mb-4 text-muted">Le llegará por correo el enlace para crear su contraseña. En su primer ingreso completa sus datos de contacto.</p>
           <ActionForm action={createStaffAction} submitLabel="Crear cuenta">
             <div className="grid gap-5 sm:grid-cols-2">
               <div>

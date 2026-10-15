@@ -81,7 +81,19 @@ export async function respondCover(db: Db, actor: Actor, requestId: string, acce
       await tx.run("UPDATE class_cover_requests SET status = 'cancelada', resolved_at = ? WHERE id = ?", [nowIso(), requestId]);
       return { ok: false, error: "Esta clase ya no está a nombre de quien te la pidió. La solicitud se canceló." };
     }
+    const me = await tx.get<{ can_grade: number }>("SELECT can_grade FROM users WHERE id = ?", [actor.id]);
+    if (me?.can_grade !== 1) {
+      // Suplente sin permiso de aprobar: queda como docente adicional (da la clase y cambia horarios); la nota la sigue poniendo la titular.
+      await tx.run("INSERT OR IGNORE INTO class_teachers (class_id, user_id) VALUES (?, ?)", [r.class_id, actor.id]);
+      await tx.run("UPDATE class_cover_requests SET status = 'aceptada', resolved_at = ? WHERE id = ?", [nowIso(), requestId]);
+      await notify(tx, r.from_user, `${r.to_name} te suplirá en «${r.class_title}»`, "Dará la clase y podrá cambiar horarios, pero la nota (aprobada o no aprobada) la sigues poniendo tú. Las estudiantes no reciben aviso de este cambio.");
+      return { ok: true };
+    }
     await tx.run("UPDATE classes SET teacher_id = ? WHERE id = ?", [actor.id, r.class_id]);
+    await tx.run("DELETE FROM class_teachers WHERE class_id = ? AND user_id = ?", [r.class_id, actor.id]);
+    // Los horarios de la clase pasan al ciclo activo de quien la recibe (o quedan sueltos si no tiene), para que no desaparezcan cuando la anterior cierre el suyo.
+    const cycle = await tx.get<{ id: string }>("SELECT id FROM teacher_cycles WHERE teacher_id = ? AND status = 'activo' ORDER BY created_at DESC LIMIT 1", [actor.id]);
+    await tx.run("UPDATE sessions SET cycle_id = ? WHERE class_id = ? AND cycle_id IN (SELECT id FROM teacher_cycles WHERE teacher_id = ?)", [cycle?.id ?? null, r.class_id, r.from_user]);
     await tx.run("UPDATE class_cover_requests SET status = 'aceptada', resolved_at = ? WHERE id = ?", [nowIso(), requestId]);
     await notify(tx, r.from_user, `${r.to_name} aceptó suplirte en «${r.class_title}»`, "La clase ya pasó a su nombre. Las estudiantes no reciben aviso de este cambio.");
     return { ok: true };

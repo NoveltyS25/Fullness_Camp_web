@@ -17,6 +17,7 @@ export interface ChipSession {
   contact_email: string | null;
   contact_phone: string | null;
   lesson_topics: string | null;
+  cycle_name: string | null;
 }
 
 /** Una clase dentro del calendario de la estudiante: al tocarla se abre una ventana con toda su información. */
@@ -55,6 +56,12 @@ export function SessionChip({ s, modalityLabel, certTitle }: { s: ChipSession; m
               <dt className="text-sm font-medium text-muted">Cuándo</dt>
               <dd className="font-medium">{formatDay(s.starts_at)}, {formatRange(s.starts_at, s.ends_at)}</dd>
             </div>
+            {s.cycle_name && (
+              <div>
+                <dt className="text-sm font-medium text-muted">Ciclo</dt>
+                <dd>{s.cycle_name}</dd>
+              </div>
+            )}
             <div>
               <dt className="text-sm font-medium text-muted">Docente</dt>
               <dd>{s.teacher_name ?? "Por asignar"}</dd>

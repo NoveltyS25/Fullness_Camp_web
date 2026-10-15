@@ -11,6 +11,8 @@ export interface User {
   whatsapp_phone: string | null;
   role: Role;
   must_change_password: number;
+  /** 0 = suplente: no marca aprobadas ni no aprobadas. */
+  can_grade: number;
   notify_email: number;
   notify_whatsapp: number;
 }
@@ -23,7 +25,7 @@ export const PENDING_PREFIX = "PEND-";
 export const isPendingCedula = (cedula: string): boolean => cedula.startsWith(PENDING_PREFIX);
 
 export const USER_COLUMNS =
-  "id, cedula, full_name, email, whatsapp_phone, role, must_change_password, notify_email, notify_whatsapp";
+  "id, cedula, full_name, email, whatsapp_phone, role, must_change_password, can_grade, notify_email, notify_whatsapp";
 
 export function findUserByCedula(db: Db, cedula: string): Promise<User | undefined> {
   return db.get<User>(`SELECT ${USER_COLUMNS} FROM users WHERE cedula = ?`, [cedula]);

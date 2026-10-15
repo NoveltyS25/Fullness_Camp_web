@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getProgram } from "@/data/programs";
-import { createCohort, createStaffAccount, enrollManual, setCohortActive, setEnrollmentStatus, setRoleByCedula } from "@/server/campus";
+import { createCohort, createStaffAccount, setCanGrade, enrollManual, setCohortActive, setEnrollmentStatus, setRoleByCedula } from "@/server/campus";
 import { setCourseCompleted } from "@/server/curriculum";
 import { getDb } from "@/server/db";
 import { normalizeCedula } from "@/server/security";
@@ -78,6 +78,12 @@ export async function setCohortActiveAction(fd: FormData) {
   const cohortId = text(fd, "cohort_id");
   await setCohortActive(getDb(), cohortId, text(fd, "active") === "true");
   revalidatePath(`/campus/admin/cohortes/${cohortId}`);
+  revalidatePath("/campus/admin");
+}
+
+export async function setCanGradeAction(fd: FormData) {
+  const admin = await requireAdmin();
+  await setCanGrade(getDb(), admin, text(fd, "user_id"), text(fd, "can_grade") === "true");
   revalidatePath("/campus/admin");
 }
 

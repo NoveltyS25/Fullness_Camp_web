@@ -5,6 +5,7 @@ import { formatDay, formatRange } from "@/lib/campus/time";
 import { getClassSessions } from "@/server/campus";
 import { CHOICE_LABEL, PROGRESS_LABEL, PROGRESS_TONE, TEACHER_CHOICES } from "@/lib/campus/progress";
 import { listCoverCandidates, pendingCoverForClass } from "@/server/covers";
+import { getActiveCycle } from "@/server/classes";
 import { getClassForActor, getClassLessons, getClassStudentsProgress, MODALITIES } from "@/server/classes";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
@@ -26,7 +27,8 @@ export default async function MiClase(props: PageProps<"/campus/profesor/clases/
   if (!c) notFound();
   const [sessions, students, lessons] = await Promise.all([getClassSessions(db, id, new Date().toISOString()), getClassStudentsProgress(db, id), getClassLessons(db, id)]);
   const error = one(q.error);
-  const [pendingCover, candidates] = await Promise.all([pendingCoverForClass(db, id), listCoverCandidates(db, user.id)]);
+  const [pendingCover, candidates, cycle] = await Promise.all([pendingCoverForClass(db, id), listCoverCandidates(db, user.id), getActiveCycle(db, user.id)]);
+  const needsCycle = !c.is_event && !cycle;
 
   return (
     <div className="space-y-12">
@@ -39,6 +41,12 @@ export default async function MiClase(props: PageProps<"/campus/profesor/clases/
         </p>
       </div>
 
+      {needsCycle && (
+        <p role="status" className="rounded-2xl border-2 border-clay-dark bg-white p-4 text-lg">
+          Para programar las clases de esta asignatura primero <Link href="/campus/profesor/ciclo" className="font-medium text-clay-dark underline">inicia tu ciclo</Link>. {c.programs.length > 0 ? "Los retiros y talleres presenciales no lo necesitan." : ""}
+        </p>
+      )}
+      {c.is_event ? <p className="rounded-2xl bg-clay-soft p-4 text-lg">Esta asignatura es un retiro o taller presencial: sus fechas las pones tú o la administración en cualquier momento, sin ciclo.</p> : null}
       {one(q.nueva) && <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">✓ Clase creada. Ahora agrega sus horarios.</p>}
       {one(q.ok) && <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">✓ Guardado.</p>}
       {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-lg font-medium text-red-800">{error}</p>}

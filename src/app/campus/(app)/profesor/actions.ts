@@ -6,6 +6,7 @@ import { fromLocalInput } from "@/lib/campus/time";
 import { addClassSessions, addLesson, createClassWithSessions, deleteClass, deleteLesson, scheduleLesson, setClassProgress, updateClass } from "@/server/classes";
 import type { FormState } from "@/app/campus/actions";
 import { cancelCover, requestCover, respondCover } from "@/server/covers";
+import { closeCycle, startCycle } from "@/server/cycles";
 import { getDb } from "@/server/db";
 import { sendEmail } from "@/server/outbox";
 import { coverRequestEmail } from "@/server/templates";
@@ -123,6 +124,21 @@ export async function respondCoverAction(fd: FormData) {
   const r = await respondCover(getDb(), user, text(fd, "request_id"), text(fd, "decision") === "aceptar");
   revalidatePath("/campus", "layout");
   back("/campus/profesor", r.ok ? undefined : r.error);
+}
+
+/** Inicia el ciclo de la docente (cierra el anterior). */
+export async function startCycleAction(fd: FormData) {
+  const user = await requireStaff();
+  const r = await startCycle(getDb(), user, text(fd, "starts_on"));
+  revalidatePath("/campus", "layout");
+  back("/campus/profesor/ciclo", r.ok ? undefined : r.error);
+}
+
+export async function closeCycleAction(fd: FormData) {
+  const user = await requireStaff();
+  const r = await closeCycle(getDb(), user, text(fd, "cycle_id"));
+  revalidatePath("/campus", "layout");
+  back("/campus/profesor/ciclo", r.ok ? undefined : r.error);
 }
 
 export async function updateClassAction(fd: FormData) {

@@ -6,6 +6,8 @@ import { currentMonth, monthRangeIso, parseMonth } from "@/lib/campus/calendar";
 import { getTeacherSessionsBetween } from "@/server/campus";
 import { getTeacherClasses, MODALITIES } from "@/server/classes";
 import { incomingCoverRequests } from "@/server/covers";
+import { getActiveCycle } from "@/server/classes";
+import { formatDate } from "@/lib/campus/time";
 import { getDb } from "@/server/db";
 import { getCurrentUser } from "@/server/web";
 import { respondCoverAction } from "./actions";
@@ -22,7 +24,7 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
   const { year, month } = parseMonth(one(q.mes)) ?? currentMonth();
   const range = monthRangeIso(year, month);
   const db = getDb();
-  const [sessions, classes, covers] = await Promise.all([getTeacherSessionsBetween(db, user.id, range.from, range.to), getTeacherClasses(db, user.id), incomingCoverRequests(db, user.id)]);
+  const [sessions, classes, covers, cycle] = await Promise.all([getTeacherSessionsBetween(db, user.id, range.from, range.to), getTeacherClasses(db, user.id), incomingCoverRequests(db, user.id), getActiveCycle(db, user.id)]);
 
   const notified = one(q.guardado) === undefined ? null : Number(one(q.guardado));
   const error = one(q.error);
@@ -55,6 +57,16 @@ export default async function MisClases(props: PageProps<"/campus/profesor">) {
         </p>
       )}
       {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-lg font-medium text-red-800">{error}</p>}
+
+      <section aria-labelledby="ciclo" className="rounded-3xl bg-clay-soft p-6">
+        <h2 id="ciclo" className="mb-1 text-2xl font-bold">{cycle ? `Ciclo activo: ${cycle.name}` : "Aún no has iniciado tu ciclo"}</h2>
+        <p className="mb-4 text-lg">
+          {cycle
+            ? `Inició el ${formatDate(`${cycle.starts_on}T12:00:00-05:00`)}. Entra para poner las fechas y horas de cada una de tus clases.`
+            : "Inicia tu ciclo para programar tus clases: cada ciclo se llama como el mes y el año en que lo creas."}
+        </p>
+        <Link href="/campus/profesor/ciclo" className="btn btn-primary">{cycle ? "Programar mis clases" : "Iniciar ciclo"}</Link>
+      </section>
 
       {covers.length > 0 && (
         <section aria-labelledby="suplencias" className="rounded-3xl border-2 border-clay-dark bg-white p-6">

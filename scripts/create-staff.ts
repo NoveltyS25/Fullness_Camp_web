@@ -19,7 +19,13 @@ import { manualAccountEmail } from "../src/server/templates.ts";
 import { findUserByCedula } from "../src/server/users.ts";
 
 const args = new Map<string, string>();
-for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i].replace(/^--/, ""), process.argv[i + 1] ?? "");
+for (let i = 2; i < process.argv.length; i += 2) {
+  const key = process.argv[i].replace(/^--/, "");
+  if (key === "no-grade") {
+    args.set(key, "1");
+    i -= 1; // bandera sin valor
+  } else args.set(key, process.argv[i + 1] ?? "");
+}
 
 const role = args.get("role") === "admin" ? "admin" : "teacher";
 const rawCedula = args.get("cedula") ?? "";
@@ -57,6 +63,11 @@ const link = row?.body_text.match(/https?:\/\/\S*restablecer\?token=\S+/)?.[0];
 if (!existing) {
   console.log(`Cuenta creada: ${name} (${role}) ${cedula ? `cédula ${cedula}` : "sin cédula (la escribe al entrar)"}`);
   console.log(`Enlace para crear la contraseña (válido 7 días):\n${link ?? "(míralo en /demo/bandeja)"}`);
+}
+
+if (args.has("no-grade")) {
+  await db.run("UPDATE users SET can_grade = 0 WHERE email = ?", [email.toLowerCase()]);
+  console.log("Suplente: no aprueba estudiantes.");
 }
 
 const contact = args.get("contact-email");

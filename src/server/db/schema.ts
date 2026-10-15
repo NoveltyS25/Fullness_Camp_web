@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'teacher', 'admin')),
   password_hash TEXT NOT NULL,
   must_change_password INTEGER NOT NULL DEFAULT 1,
+  -- 0 = docente suplente: puede dar clases y cambiar horarios, pero no marcar a las estudiantes como aprobadas o no aprobadas.
+  can_grade INTEGER NOT NULL DEFAULT 1,
   notify_email INTEGER NOT NULL DEFAULT 1,
   notify_whatsapp INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
@@ -111,9 +113,47 @@ CREATE TABLE IF NOT EXISTS classes (
   description TEXT,
   -- Docente prevista (por su correo): la clase se le asigna sola en cuanto exista su cuenta.
   suggested_teacher_email TEXT,
+  -- Otras docentes que la dictan junto con la principal (correos separados por coma) hasta que existan sus cuentas.
+  suggested_coteacher_emails TEXT,
+  -- Identifica la asignatura del pensum inicial para compartirla entre certificaciones sin duplicarla.
+  seed_key TEXT,
+  -- 1 = evento (retiro, taller presencial): sus fechas las pone la docente o la administración en cualquier momento, sin ciclo.
+  is_event INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS classes_teacher_idx ON classes (teacher_id);
+
+-- Docentes adicionales de una asignatura (la principal está en classes.teacher_id). Pueden poner y cambiar horarios.
+CREATE TABLE IF NOT EXISTS class_teachers (
+  class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  PRIMARY KEY (class_id, user_id)
+);
+
+-- Ciclo de una docente: «Octubre 2027». Las clases que programa dentro de un ciclo solo se muestran mientras el ciclo está activo;
+-- al iniciar otro ciclo, el anterior se cierra.
+CREATE TABLE IF NOT EXISTS teacher_cycles (
+  id TEXT PRIMARY KEY,
+  teacher_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  starts_on TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'activo' CHECK (status IN ('activo', 'cerrado')),
+  created_at TEXT NOT NULL,
+  closed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS teacher_cycles_teacher_idx ON teacher_cycles (teacher_id, status);
+
+-- Historial de resultados: cada vez que una docente marca aprobada o no aprobada, queda anotado con el ciclo.
+CREATE TABLE IF NOT EXISTS class_results (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
+  cycle_id TEXT REFERENCES teacher_cycles (id) ON DELETE SET NULL,
+  status TEXT NOT NULL,
+  recorded_by TEXT REFERENCES users (id) ON DELETE SET NULL,
+  recorded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS class_results_idx ON class_results (user_id, class_id);
 
 -- Temario de una clase por encuentros («Clase 1», «Clase 2»…). La docente le pone fecha y hora a cada uno.
 -- topics = un tema por línea.
@@ -132,6 +172,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   class_id TEXT NOT NULL REFERENCES classes (id) ON DELETE CASCADE,
   lesson_id TEXT REFERENCES class_lessons (id) ON DELETE SET NULL,
+  cycle_id TEXT REFERENCES teacher_cycles (id) ON DELETE SET NULL,
   title TEXT NOT NULL,
   starts_at TEXT NOT NULL,
   ends_at TEXT NOT NULL,

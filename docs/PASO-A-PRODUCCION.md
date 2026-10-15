@@ -61,7 +61,9 @@ El correo de Paula Salazar sirve para pruebas y también es docente real.
 
 - [ ] **Diseñar el correo de bienvenida y mostrarlo antes de enviar** (se aprueba el diseño; no se envía nada hasta producción).
 - [ ] El correo dice: bienvenida al campus virtual de Fullness Camp, entrar con el enlace para **crear su contraseña**, y que el **primer paso** es registrar sus clases y horarios y a qué certificación corresponde cada clase.
-- [ ] Crear las cuentas de profesora (rol `teacher`) solo con nombre y correo; cada una escribe su cédula en su primer ingreso (no hay que pedírselas antes).
+- [ ] Crear las cuentas de profesora (rol `teacher`) solo con nombre y correo; cada una escribe su cédula en su primer ingreso (no hay que pedírselas antes). Al crearlas, sus asignaturas quedan a su nombre solas (por correo). **Laura Quintero** (suplente de Ayurveda de Lila y Celi) se crea con `--no-grade` o con el botón «Hacerla suplente» en Administración.
+- [ ] Con la base de producción nueva, el pensum de los 5 certificados se siembra solo la primera vez (no hace falta `aplicar-organizacion`).
+- [ ] Cada docente **inicia su ciclo** y pone fechas a sus clases; los retiros y talleres presenciales los programan Lila o la administración.
 - [ ] Perfil de la docente en el campus: **foto** (subir imagen; hoy solo acepta un enlace) y nombre/cargo.
 - [ ] Sección «Clases grabadas» por docente: pegan enlaces (por ahora de Google Meet) y se abren en **una ventana nueva** sin salir del campus.
 - [ ] Paso a paso de primer ingreso para la docente: 1) crear contraseña, 2) subir foto, 3) registrar clases y horarios por certificación, 4) agregar enlaces de grabaciones.

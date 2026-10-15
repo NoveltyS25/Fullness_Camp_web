@@ -38,13 +38,13 @@ export default async function ArmarCertificacion(props: PageProps<"/campus/admin
       {error && <p role="alert" className="rounded-2xl bg-red-50 p-4 text-lg font-medium text-red-800">{error}</p>}
       {one(q.ok) && <p role="status" className="rounded-2xl bg-clay-soft p-4 text-lg font-medium text-clay-dark">✓ Guardado.</p>}
 
-      {modules.map((m, mi) => {
+      {modules.map((m) => {
         const inModule = new Set(m.classes.map((c) => c.class_id));
         const available = allClasses.filter((c) => !inModule.has(c.id));
         return (
           <section key={m.id} aria-labelledby={`m-${m.id}`}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <h2 id={`m-${m.id}`} className="text-2xl font-bold">Módulo {mi + 1}. {m.title}</h2>
+              <h2 id={`m-${m.id}`} className="text-2xl font-bold">{m.title}</h2>
               <form action={deleteModuleAction}>
                 <input type="hidden" name="slug" value={slug} />
                 <input type="hidden" name="module_id" value={m.id} />

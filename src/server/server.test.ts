@@ -328,17 +328,26 @@ test("los días hábiles saltan sábados y domingos", () => {
 });
 
 
-// ---------------------------------------------------------------- clases propias de cada docente, pensum, horarios y certificado
 
-import { createStaffAccount, getStudentSessions, rescheduleSession } from "./campus.ts";
+// ---------------------------------------------------------------- organización de los 5 certificados, ciclos, suplencias y avance
+
+import { createStaffAccount, getStudentSessions, getStudentSessionsBetween, getTeacherSessionsBetween, rescheduleSession, setCanGrade } from "./campus.ts";
 import {
-  addClassSessions, addModule, createClass, deleteClass, getClassStudents, getPensum, getProgramTeachers, listClasses, placeClass, unplaceClass, updateClass,
+  addClassSessions, addLesson, addModule, createClass, createClassWithSessions, deleteClass, deleteLesson, getClassLessons, getClassStudents,
+  getClassStudentsProgress, getPensum, getProgramTeachers, getStudentProgress, getTeacherClasses, listClasses, placeClass, scheduleLesson, setClassProgress,
+  unplaceClass, updateClass,
 } from "./classes.ts";
+import { cancelCover, incomingCoverRequests, listCoverCandidates, requestCover, respondCover } from "./covers.ts";
+import { closeCycle, cycleNameFor, getCycleClasses, startCycle } from "./cycles.ts";
 import { getCertificate, setCourseCompleted } from "./curriculum.ts";
 import { isPendingCedula } from "./users.ts";
 
 const HATHA = "hatha-vinyasa-yoga-y-meditacion";
+const HATHA200 = "the-happiness-program-3";
 const PILATES = "certificacion-de-yoga-y-pilates";
+const KIDS = "certificacion-de-yoga-kids-y-yoga-prenatal";
+const MAESTRIA = "maestria-yogaayurveda-mujer";
+const FUTURE = { startsAt: "2099-03-02T23:00:00.000Z", endsAt: "2099-03-03T01:00:00.000Z" };
 
 async function classesSetup() {
   const db = await setup();
@@ -355,77 +364,292 @@ async function enroll(db: Db, userId: string, programSlug: string) {
   return id;
 }
 
-const FUTURE = { startsAt: "2099-03-02T23:00:00.000Z", endsAt: "2099-03-03T01:00:00.000Z" };
+const cycle = async (db: Db, who: { id: string; role: "teacher" | "admin" | "student" }, now = new Date("2099-02-10T15:00:00Z")) => {
+  const r = await startCycle(db, who, "2099-03-01", now);
+  assert.ok(r.ok);
+  return r.ok ? r : (undefined as never);
+};
 
-test("el pensum de Hatha se siembra una sola vez, con clases sin docente", async () => {
+const account = (db: Db, name: string, email: string) => createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: name, email, role: "teacher" }, "http://localhost:3000");
+const allClasses = async (db: Db, slug: string) => (await getPensum(db, slug)).flatMap((m) => m.classes);
+const byTitle = async (db: Db, title: string) => (await listClasses(db)).find((c) => c.title === title)!;
+const notifCount = async (db: Db, userId: string) => Number((await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ?", [userId]))?.n);
+
+// ---- la organización de los 5 certificados
+
+test("los 5 certificados se arman en «Módulo 1», «Módulo 2»… con las asignaturas del documento de organización", async () => {
   const { db } = await classesSetup();
-  const a = await getPensum(db, HATHA);
-  const b = await getPensum(db, HATHA);
-  assert.ok(a.length >= 5);
-  assert.equal(a.flatMap((m) => m.classes).length, b.flatMap((m) => m.classes).length);
-  assert.ok(a.every((m) => m.classes.every((c) => c.teacher_id === null)));
+  const counts = {} as Record<string, number>;
+  for (const slug of [KIDS, HATHA200, PILATES, HATHA, MAESTRIA]) {
+    const modules = await getPensum(db, slug);
+    counts[slug] = modules.length;
+    assert.deepEqual(modules.map((m) => m.title), modules.map((_, i) => `Módulo ${i + 1}`));
+  }
+  assert.deepEqual(counts, { [KIDS]: 10, [HATHA200]: 8, [PILATES]: 9, [HATHA]: 8, [MAESTRIA]: 7 });
+  const m1 = (await getPensum(db, MAESTRIA))[0];
+  assert.deepEqual(m1.classes.map((c) => c.title), ["Fundamentos del yoga", "Introducción al Ayurveda", "Fundamentos de medicina Ayurveda"]);
+  const hatha = (await allClasses(db, HATHA)).map((c) => c.title);
+  assert.ok(hatha.includes("Meditación y respiración") && !hatha.includes("Integración emocional"), "Hatha 300 lleva meditación y no integración emocional");
+  assert.ok((await allClasses(db, PILATES)).some((c) => c.title === "Pilates"));
 });
 
-test("una docente crea su clase; una estudiante no; y no puede quedarse con la de otra", async () => {
+test("una asignatura compartida se crea una sola vez, con sus clases, y es la misma en todos los certificados", async () => {
+  const { db } = await classesSetup();
+  await getPensum(db, MAESTRIA);
+  const ids = new Set<string>();
+  for (const slug of [HATHA200, PILATES, HATHA]) ids.add((await allClasses(db, slug)).find((c) => c.title === "Historia y filosofía")!.class_id);
+  assert.equal(ids.size, 1);
+  const historia = await byTitle(db, "Historia y filosofía");
+  assert.equal((await getClassLessons(db, historia.id)).length, 10);
+  assert.deepEqual(historia.programs.sort(), [HATHA, HATHA200, PILATES].sort());
+  const marketing = await byTitle(db, "El yoga como fuente de ingresos y de servicio");
+  assert.equal((await getClassLessons(db, marketing.id)).length, 4, "4 clases: un ciclo de un mes, una por semana");
+  const bio = await byTitle(db, "Biomecánica aplicada al yoga");
+  assert.equal((await getClassLessons(db, bio.id)).length, 8);
+  assert.equal((await getClassLessons(db, (await byTitle(db, "Ciclo lunar: 16 meditaciones")).id)).length, 16);
+  const retiro = await byTitle(db, "Retiro de yoga y meditación");
+  assert.equal(retiro.is_event, 1);
+  assert.equal(retiro.modality, "presencial");
+});
+
+test("al crear la cuenta de cada docente, sus asignaturas quedan a su nombre; las compartidas, con las dos docentes", async () => {
+  const { db } = await classesSetup();
+  await getPensum(db, MAESTRIA);
+  await getPensum(db, KIDS);
+  await account(db, "Lila Govardhan", "academicofullnesscamp@fullnesscamp.com");
+  await account(db, "Dra. Celi", "DraCelyMargarita@gmail.com");
+  await account(db, "Diana Flores", "flormoramar6@gmail.com");
+  await account(db, "William Feragotto", "williamferagotto@gmail.com");
+
+  const lunar = await byTitle(db, "Ciclo lunar: 16 meditaciones");
+  assert.equal(lunar.teacher_name, "Lila Govardhan y Dra. Celi");
+  assert.equal((await byTitle(db, "Cosmética natural")).teacher_name, "Lila Govardhan y William Feragotto");
+  assert.equal((await byTitle(db, "Retiro de Yoga Kids y Prenatal")).teacher_name, "Lila Govardhan y Diana Flores");
+  const celi = (await db.get<{ id: string }>("SELECT id FROM users WHERE email = 'dracelymargarita@gmail.com'"))!;
+  assert.deepEqual((await getTeacherClasses(db, celi.id)).map((c) => c.title).sort(), ["Ciclo lunar: 16 meditaciones", "Fundamentos de medicina Ayurveda"]);
+  assert.equal((await byTitle(db, "Hipopresivos")).teacher_id, null, "Susana aún no tiene cuenta");
+  assert.ok((await getProgramTeachers(db, MAESTRIA)).some((t) => t.full_name === "William Feragotto"));
+});
+
+test("si la cuenta ya existía cuando se siembra el certificado, la asignatura nace a su nombre", async () => {
+  const { db } = await classesSetup();
+  await account(db, "Lila Govardhan", "academicofullnesscamp@fullnesscamp.com");
+  await account(db, "Dra. Celi", "dracelymargarita@gmail.com");
+  const lunar = (await allClasses(db, MAESTRIA)).find((c) => c.title === "Ciclo lunar: 16 meditaciones")!;
+  assert.equal(lunar.teacher_name, "Lila Govardhan y Dra. Celi");
+});
+
+// ---- ciclos
+
+test("el ciclo se llama como el mes y el año en que se crea; iniciar otro cierra el anterior", async () => {
+  const { db, t1 } = await classesSetup();
+  assert.equal(cycleNameFor(new Date("2027-10-14T15:00:00Z")), "Octubre 2027");
+  assert.equal(cycleNameFor(new Date("2027-01-01T03:00:00Z")), "Diciembre 2026", "en hora de Colombia todavía es 31 de diciembre");
+  const a = await cycle(db, t1, new Date("2027-10-14T15:00:00Z"));
+  assert.equal(a.name, "Octubre 2027");
+  const b = await cycle(db, t1, new Date("2027-10-28T15:00:00Z"));
+  assert.equal(b.name, "Octubre 2027 (2)", "dos ciclos en el mismo mes no se confunden");
+  const active = await db.all<{ name: string }>("SELECT name FROM teacher_cycles WHERE teacher_id = ? AND status = 'activo'", [t1.id]);
+  assert.deepEqual(active.map((c) => c.name), ["Octubre 2027 (2)"]);
+  assert.equal((await startCycle(db, t1, "no-es-fecha")).ok, false);
+  assert.equal((await closeCycle(db, t1, b.id)).ok, true);
+  assert.equal((await closeCycle(db, t1, b.id)).ok, false);
+});
+
+test("programar clases exige tener el ciclo activo; los retiros no dependen del ciclo y la administración los programa cuando quiera", async () => {
+  const { db, admin, t1 } = await classesSetup();
+  await account(db, "Lila", "academicofullnesscamp@fullnesscamp.com");
+  const lila = (await db.get<{ id: string; role: "teacher" }>("SELECT id, role FROM users WHERE email = 'academicofullnesscamp@fullnesscamp.com'"))!;
+  await getPensum(db, HATHA);
+  const fundamentos = await byTitle(db, "Fundamentos del yoga");
+  const retiro = await byTitle(db, "Retiro de yoga y meditación");
+  const [lesson] = await getClassLessons(db, fundamentos.id);
+  const at = { startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: "", onlineUrl: "https://meet.google.com/abc-defg-hij" };
+
+  const sinCiclo = await scheduleLesson(db, lila, { lessonId: lesson.id, ...at });
+  assert.equal(sinCiclo.ok, false);
+  assert.match(sinCiclo.ok ? "" : sinCiclo.error, /inicia tu ciclo/i);
+  await cycle(db, lila);
+  assert.deepEqual(await scheduleLesson(db, lila, { lessonId: lesson.id, ...at }), { ok: true });
+  const row = await db.get<{ cycle_id: string | null }>("SELECT cycle_id FROM sessions WHERE class_id = ?", [fundamentos.id]);
+  assert.ok(row?.cycle_id, "la clase quedó dentro del ciclo");
+
+  // retiro: sin ciclo (la docente aunque no tenga) y por la administración
+  const [taller] = await getClassLessons(db, retiro.id);
+  assert.equal((await scheduleLesson(db, t1, { lessonId: taller.id, ...at, location: "Tabío" })).ok, false, "otra docente no puede");
+  assert.deepEqual(await scheduleLesson(db, admin, { lessonId: taller.id, ...at, location: "Tabío", onlineUrl: "" }), { ok: true });
+  const ev = await db.get<{ cycle_id: string | null }>("SELECT cycle_id FROM sessions WHERE class_id = ?", [retiro.id]);
+  assert.equal(ev?.cycle_id, null);
+  // la administración programando la clase de otra docente tampoco necesita ciclo propio
+  const [l2] = (await getClassLessons(db, fundamentos.id)).slice(1);
+  assert.deepEqual(await scheduleLesson(db, admin, { lessonId: l2.id, ...at }), { ok: true });
+});
+
+test("las estudiantes ven solo el ciclo activo; quien aprobó la asignatura no ve más sus horarios y quien no, la ve de nuevo", async () => {
+  const { db, admin, t1, stu } = await classesSetup();
+  const stu2 = await createUser(db, { cedula: "6", fullName: "Otra", email: "s6@x.co", role: "student", password: "Correcta123" });
+  const made = await createClass(db, t1, { title: "Anatomía", modality: "virtual", description: "" });
+  const classId = made.ok ? made.id : "";
+  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, classId);
+  await enroll(db, stu.id, HATHA);
+  await enroll(db, stu2.id, HATHA);
+
+  const c1 = await cycle(db, t1, new Date("2099-02-10T15:00:00Z"));
+  await addClassSessions(db, t1, { classId, title: "", startsAt: "2020-01-07T23:00:00.000Z", endsAt: "2020-01-08T01:00:00.000Z", weeks: 2, location: null, onlineUrl: null });
+  assert.equal((await getStudentSessions(db, stu.id)).length, 0, "sesiones pasadas no se listan como próximas");
+  const range = ["2020-01-01T05:00:00.000Z", "2020-03-01T05:00:00.000Z"] as const;
+  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).length, 2);
+
+  // la docente aprueba a una y no aprueba a la otra
+  assert.deepEqual(await setClassProgress(db, t1, classId, stu.id, "aprobado"), { ok: true });
+  assert.deepEqual(await setClassProgress(db, t1, classId, stu2.id, "no_aprobado"), { ok: true });
+  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).length, 0, "la que aprobó ya no ve los horarios");
+  assert.equal((await getStudentSessionsBetween(db, stu2.id, HATHA, ...range)).length, 2);
+  const hist = await db.all<{ status: string; cycle_id: string | null }>("SELECT status, cycle_id FROM class_results WHERE class_id = ? ORDER BY status", [classId]);
+  assert.deepEqual(hist.map((h) => h.status), ["aprobado", "no_aprobado"]);
+  assert.ok(hist.every((h) => h.cycle_id === c1.id), "el resultado queda anotado con su ciclo");
+
+  // ciclo nuevo: los horarios del anterior se esconden y quien no aprobó vuelve a empezar
+  const c2 = await cycle(db, t1, new Date("2099-06-10T15:00:00Z"));
+  assert.notEqual(c2.id, c1.id);
+  assert.equal((await getStudentSessionsBetween(db, stu2.id, HATHA, ...range)).length, 0, "el ciclo anterior está cerrado");
+  await addClassSessions(db, t1, { classId, title: "", ...FUTURE, weeks: 2, location: null, onlineUrl: null });
+  const future = ["2099-03-01T05:00:00.000Z", "2099-04-01T05:00:00.000Z"] as const;
+  assert.equal((await getStudentSessionsBetween(db, stu2.id, HATHA, ...future)).length, 2, "quien no aprobó la ve en el ciclo nuevo");
+  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, ...future)).length, 0, "quien aprobó no la vuelve a ver");
+  const prog = await getStudentProgress(db, stu2.id, HATHA);
+  assert.equal(prog.modules.flatMap((m) => m.classes).find((c) => c.class_id === classId)!.decided, false, "su «no aprobada» anterior se reinició");
+  assert.equal(prog.modules.flatMap((m) => m.classes).find((c) => c.class_id === classId)!.status, "pendiente");
+  assert.equal((await getStudentProgress(db, stu.id, HATHA)).approved, 1, "la aprobada se conserva");
+});
+
+test("el panel del ciclo muestra, por asignatura, dónde aparece y cuántas clases ya tienen fecha", async () => {
+  const { db } = await classesSetup();
+  await account(db, "Lila", "academicofullnesscamp@fullnesscamp.com");
+  await getPensum(db, HATHA);
+  await getPensum(db, MAESTRIA);
+  const lila = (await db.get<{ id: string; role: "teacher" }>("SELECT id, role FROM users WHERE email = 'academicofullnesscamp@fullnesscamp.com'"))!;
+  const c = await cycle(db, lila);
+  const [l1] = await getClassLessons(db, (await byTitle(db, "Fundamentos del yoga")).id);
+  await scheduleLesson(db, lila, { lessonId: l1.id, startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: "", onlineUrl: "https://meet.google.com/abc-defg-hij" });
+  const overview = await getCycleClasses(db, lila.id, c.id);
+  const f = overview.find((x) => x.title === "Fundamentos del yoga")!;
+  assert.equal(f.scheduled, 1);
+  assert.equal(f.lessons_total, 8);
+  assert.deepEqual(f.placements.map((p) => p.program_slug).sort(), [HATHA, MAESTRIA].sort());
+  assert.ok(overview.some((x) => x.is_event === 1 && x.title === "Retiro de yoga y meditación"));
+});
+
+// ---- clases de las docentes, temario y permisos
+
+test("una docente crea su clase con su primer horario (necesita ciclo); una estudiante no; no se la puede quitar a otra", async () => {
   const { db, t1, t2, stu } = await classesSetup();
   assert.equal((await createClass(db, stu, { title: "Colada", modality: "virtual", description: "" })).ok, false);
-  const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "", teacherId: t2.id }); // teacherId se ignora para docentes
+  const made = await createClass(db, t1, { title: "Marketing 1", modality: "virtual", description: "", teacherId: t2.id }); // teacherId se ignora para docentes
   assert.ok(made.ok);
-  assert.equal((await listClasses(db))[0].teacher_id, t1.id);
+  assert.equal((await byTitle(db, "Marketing 1")).teacher_id, t1.id);
   assert.equal((await updateClass(db, t2, made.ok ? made.id : "", { title: "Mía ahora", modality: "virtual", description: "" })).ok, false);
   assert.equal((await createClass(db, t1, { title: "X", modality: "otra", description: "" })).ok, false);
 });
 
-test("la misma clase en dos certificaciones: sus estudiantes son las de ambas, con su certificación al lado", async () => {
-  const { db, admin, t1, stu } = await classesSetup();
-  const stu2 = await createUser(db, { cedula: "5", fullName: "Otra Estudiante", email: "s2@x.co", role: "student", password: "Correcta123" });
-  const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
-  assert.ok(made.ok);
-  const classId = made.ok ? made.id : "";
-  await addModule(db, admin, PILATES, "Módulo 1");
-  const hathaModule = (await getPensum(db, HATHA))[0].id;
-  const pilatesModule = (await getPensum(db, PILATES))[0].id;
-  assert.equal((await placeClass(db, t1, hathaModule, classId)).ok, false); // solo la administración arma certificaciones
-  assert.deepEqual(await placeClass(db, admin, hathaModule, classId), { ok: true });
-  assert.deepEqual(await placeClass(db, admin, pilatesModule, classId), { ok: true });
-  assert.equal((await placeClass(db, admin, pilatesModule, classId)).ok, false); // repetida
+const newClass = { title: "Taller propio", modality: "virtual", description: "Descripción de la clase.", teacherId: undefined, ...FUTURE, weeks: 2, location: "", onlineUrl: "https://meet.google.com/abc-defg-hij" };
 
-  await enroll(db, stu.id, HATHA);
-  await enroll(db, stu2.id, PILATES);
-  const students = await getClassStudents(db, classId);
-  assert.deepEqual(students.map((s) => `${s.full_name}:${s.program_slug}`).sort(), [`Estudiante:${HATHA}`, `Otra Estudiante:${PILATES}`]);
-  assert.equal((await getProgramTeachers(db, HATHA))[0].full_name, "Docente Uno");
+test("crear una clase con su horario la deja en el calendario de la docente, siempre que tenga ciclo", async () => {
+  const { db, t1, admin } = await classesSetup();
+  assert.equal((await createClassWithSessions(db, t1, newClass)).ok, false, "sin ciclo no se programa");
+  assert.equal((await listClasses(db)).length, 0, "ninguna clase a medias");
+  await cycle(db, t1);
+  const r = await createClassWithSessions(db, t1, newClass);
+  assert.ok(r.ok);
+  const sessions = await getTeacherSessionsBetween(db, t1.id, "2099-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z");
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions[0].cycle_name, "Febrero 2099");
+  // una administradora que dicta lo suyo desde su panel de docente funciona igual
+  await cycle(db, admin);
+  const mine = await createClassWithSessions(db, admin, { ...newClass, title: "De la administradora", teacherId: admin.id });
+  assert.ok(mine.ok);
+  assert.equal((await getTeacherSessionsBetween(db, admin.id, "2099-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z")).length, 2);
 });
 
-test("cambiar el horario de una clase avisa a las estudiantes de todas sus certificaciones", async () => {
+test("crear una clase: todos los campos son obligatorios, según la modalidad", async () => {
+  const { db, t1 } = await classesSetup();
+  await cycle(db, t1);
+  const fails = async (patch: Partial<typeof newClass>) => (await createClassWithSessions(db, t1, { ...newClass, ...patch })).ok === false;
+  assert.ok(await fails({ title: "" }));
+  assert.ok(await fails({ description: "" }));
+  assert.ok(await fails({ modality: "otra" }));
+  assert.ok(await fails({ onlineUrl: "" }));
+  assert.ok(await fails({ onlineUrl: "no-es-un-enlace" }));
+  assert.ok(await fails({ weeks: 0 }));
+  assert.ok(await fails({ endsAt: FUTURE.startsAt }));
+  assert.ok(await fails({ modality: "presencial", location: "", onlineUrl: "" }));
+  assert.ok(await fails({ modality: "mixta", location: "Sede Bogotá", onlineUrl: "" }));
+  assert.equal((await listClasses(db)).length, 0, "ninguna clase a medias");
+  assert.ok((await createClassWithSessions(db, t1, { ...newClass, modality: "presencial", location: "Sede Bogotá", onlineUrl: "" })).ok);
+  assert.ok((await createClassWithSessions(db, t1, { ...newClass, modality: "mixta", location: "Sede Bogotá" })).ok);
+});
+
+test("la docente le pone horario a cada clase del temario; una sola vez por ciclo y solo ella", async () => {
+  const { db, t2, stu } = await classesSetup();
+  await account(db, "Alexa", "alexa24alexa10@gmail.com");
+  const alexa = (await db.get<{ id: string; role: "teacher" }>("SELECT id, role FROM users WHERE email = 'alexa24alexa10@gmail.com'"))!;
+  const c = (await allClasses(db, HATHA)).find((x) => x.title === "Biomecánica aplicada al yoga")!;
+  assert.equal(c.teacher_name, "Alexa");
+  const [l1, l2] = await getClassLessons(db, c.class_id);
+  const at = { startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: "", onlineUrl: "https://meet.google.com/abc-defg-hij" };
+  await cycle(db, alexa);
+
+  assert.equal((await scheduleLesson(db, t2, { lessonId: l1.id, ...at })).ok, false, "otra docente no puede");
+  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at, onlineUrl: "" })).ok, false, "virtual pide el enlace");
+  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at, endsAt: at.startsAt })).ok, false);
+  assert.deepEqual(await scheduleLesson(db, alexa, { lessonId: l1.id, ...at }), { ok: true });
+  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at })).ok, false, "ya tiene horario");
+  assert.deepEqual(await scheduleLesson(db, alexa, { lessonId: l2.id, ...at, startsAt: "2099-03-09T23:00:00.000Z", endsAt: "2099-03-10T01:00:00.000Z" }), { ok: true });
+
+  await enroll(db, stu.id, HATHA);
+  const mine = await getStudentSessions(db, stu.id);
+  assert.equal(mine.length, 2);
+  assert.match(mine[0].lesson_topics ?? "", /Concepto de cuerpo/);
+  assert.equal(mine[0].teacher_name, "Alexa");
+  assert.equal((await deleteLesson(db, t2, l2.id)).ok, false);
+  assert.equal((await deleteLesson(db, alexa, l2.id)).ok, true);
+  assert.equal((await getStudentSessions(db, stu.id)).length, 1);
+  assert.equal((await addLesson(db, alexa, c.class_id, "Clase 9: Repaso", "Tema A\nTema B")).ok, true);
+  assert.equal((await getClassLessons(db, c.class_id)).length, 8);
+});
+
+test("cambiar el horario de una clase avisa a las estudiantes que aún no la aprobaron, de todos los certificados", async () => {
   const { db, admin, t1, t2, stu } = await classesSetup();
   const stu2 = await createUser(db, { cedula: "5", fullName: "Otra", email: "s2@x.co", role: "student", password: "Correcta123" });
+  const stu3 = await createUser(db, { cedula: "7", fullName: "Ya aprobó", email: "s7@x.co", role: "student", password: "Correcta123" });
   const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
   const classId = made.ok ? made.id : "";
-  await addModule(db, admin, PILATES, "Módulo 1");
   await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, classId);
   await placeClass(db, admin, (await getPensum(db, PILATES))[0].id, classId);
   await enroll(db, stu.id, HATHA);
   await enroll(db, stu2.id, PILATES);
+  await enroll(db, stu3.id, HATHA);
+  await cycle(db, t1);
   assert.deepEqual(await addClassSessions(db, t1, { classId, title: "", ...FUTURE, weeks: 3, location: null, onlineUrl: null }), { ok: true, created: 3 });
-  assert.deepEqual(await addClassSessions(db, t2, { classId, title: "", ...FUTURE, weeks: 1, location: null, onlineUrl: null }), { ok: false, error: "No tienes permiso para cambiar los horarios de esta clase." });
+  assert.equal((await addClassSessions(db, t2, { classId, title: "", ...FUTURE, weeks: 1, location: null, onlineUrl: null })).ok, false);
+  await setClassProgress(db, t1, classId, stu3.id, "aprobado");
 
   const mine = await getStudentSessions(db, stu.id);
   assert.equal(mine.length, 3);
   assert.equal(mine[0].class_title, "Marketing");
+  assert.equal((await getStudentSessions(db, stu3.id)).length, 0);
   const r = await rescheduleSession(db, t1, { sessionId: mine[0].id, startsAt: "2099-03-04T23:00:00.000Z", endsAt: "2099-03-05T01:00:00.000Z", location: null, onlineUrl: null, status: "scheduled", reason: "Viaje de la docente" });
   assert.deepEqual(r, { ok: true, notified: 2 });
-  const n = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM notifications");
-  assert.equal(Number(n?.n), 2);
-  // otra docente no puede mover la sesión
+  assert.equal(await notifCount(db, stu3.id), 0);
   assert.equal((await rescheduleSession(db, t2, { sessionId: mine[1].id, startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: null, onlineUrl: null, status: "cancelled", reason: "No debería" })).ok, false);
 });
 
-test("una estudiante con el curso terminado deja de ver sus clases; sin inscripción no ve ninguna", async () => {
+test("una estudiante con el curso terminado deja de ver sus clases", async () => {
   const { db, admin, t1, stu } = await classesSetup();
   const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
   const classId = made.ok ? made.id : "";
   await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, classId);
+  await cycle(db, t1);
   await addClassSessions(db, t1, { classId, title: "", ...FUTURE, weeks: 2, location: null, onlineUrl: null });
   assert.equal((await getStudentSessions(db, stu.id)).length, 0);
   const eid = await enroll(db, stu.id, HATHA);
@@ -434,13 +658,13 @@ test("una estudiante con el curso terminado deja de ver sus clases; sin inscripc
   assert.equal((await getStudentSessions(db, stu.id)).length, 0);
 });
 
-test("quitar una clase de la certificación no la borra; la docente no borra clases que están en una certificación", async () => {
+test("quitar una clase del certificado no la borra; la docente no borra clases que están en un certificado", async () => {
   const { db, admin, t1 } = await classesSetup();
   const made = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
   const classId = made.ok ? made.id : "";
   await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, classId);
   assert.equal((await deleteClass(db, t1, classId)).ok, false);
-  const placement = (await getPensum(db, HATHA)).flatMap((m) => m.classes).find((c) => c.class_id === classId)!.placement_id;
+  const placement = (await allClasses(db, HATHA)).find((c) => c.class_id === classId)!.placement_id;
   assert.equal((await unplaceClass(db, t1, placement)).ok, false);
   assert.equal((await unplaceClass(db, admin, placement)).ok, true);
   assert.equal((await listClasses(db)).some((c) => c.id === classId), true);
@@ -459,8 +683,6 @@ test("el certificado solo lo ve su dueña o la administración, y solo si el cur
   assert.ok(await getCertificate(db, admin, eid));
 });
 
-// ---------------------------------------------------------------- docentes sin cédula
-
 test("una docente se crea sin cédula con un código provisional que no sirve para ingresar", async () => {
   const db = await setup();
   const r = await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Docente Nueva", email: "Nueva@X.co", role: "teacher" }, "http://localhost:3000");
@@ -471,236 +693,32 @@ test("una docente se crea sin cédula con un código provisional que no sirve pa
   assert.equal((await createStaffAccount(db, { role: "student" }, { cedula: null, fullName: "X", email: "x@x.co", role: "teacher" }, "http://localhost:3000")).ok, false);
 });
 
-// ---------------------------------------------------------------- crear una clase exige todos los datos y queda en el calendario
+// ---- docentes adicionales y suplentes que no aprueban
 
-import { createClassWithSessions } from "./classes.ts";
-import { getTeacherSessionsBetween } from "./campus.ts";
-
-const newClass = { title: "Marketing", modality: "virtual", description: "Cómo darte a conocer.", teacherId: undefined, ...FUTURE, weeks: 2, location: "", onlineUrl: "https://meet.google.com/abc-defg-hij" };
-
-test("crear una clase con su horario la deja de una vez en el calendario de la docente", async () => {
-  const { db, t1 } = await classesSetup();
-  const r = await createClassWithSessions(db, t1, newClass);
-  assert.ok(r.ok);
-  const sessions = await getTeacherSessionsBetween(db, t1.id, "2099-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z");
-  assert.equal(sessions.length, 2);
-  assert.equal(sessions[0].class_title, "Marketing");
-  assert.equal(sessions[0].online_url, "https://meet.google.com/abc-defg-hij");
-});
-
-test("una administradora que crea una clase desde su panel de docente la ve en su calendario", async () => {
-  const { db, admin } = await classesSetup();
-  const r = await createClassWithSessions(db, admin, { ...newClass, teacherId: admin.id });
-  assert.ok(r.ok);
-  assert.equal((await getTeacherSessionsBetween(db, admin.id, "2099-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z")).length, 2);
-  assert.equal((await listClasses(db))[0].teacher_name, "Admin");
-});
-
-test("crear una clase: todos los campos son obligatorios, según la modalidad", async () => {
-  const { db, t1 } = await classesSetup();
-  const fails = async (patch: Partial<typeof newClass>) => (await createClassWithSessions(db, t1, { ...newClass, ...patch })).ok === false;
-  assert.ok(await fails({ title: "" }));
-  assert.ok(await fails({ description: "" }));
-  assert.ok(await fails({ modality: "otra" }));
-  assert.ok(await fails({ onlineUrl: "" })); // virtual pide el enlace
-  assert.ok(await fails({ onlineUrl: "no-es-un-enlace" }));
-  assert.ok(await fails({ weeks: 0 }));
-  assert.ok(await fails({ endsAt: FUTURE.startsAt })); // fin igual al inicio
-  assert.ok(await fails({ modality: "presencial", location: "", onlineUrl: "" })); // presencial pide el lugar
-  assert.ok(await fails({ modality: "mixta", location: "Sede Bogotá", onlineUrl: "" })); // mixta pide los dos
-  assert.equal((await listClasses(db)).length, 0, "ninguna clase a medias");
-  assert.ok((await createClassWithSessions(db, t1, { ...newClass, modality: "presencial", location: "Sede Bogotá", onlineUrl: "" })).ok);
-  assert.ok((await createClassWithSessions(db, t1, { ...newClass, modality: "mixta", location: "Sede Bogotá" })).ok);
-});
-
-// ---------------------------------------------------------------- calendario de la estudiante por certificación
-
-import { getStudentSessionsBetween } from "./campus.ts";
-
-test("el horario mensual de la estudiante muestra solo la certificación elegida y exige inscripción activa", async () => {
-  const { db, admin, t1, stu } = await classesSetup();
-  const a = await createClass(db, t1, { title: "Anatomía", modality: "virtual", description: "" });
-  const b = await createClass(db, t1, { title: "Marketing", modality: "virtual", description: "" });
-  await addModule(db, admin, PILATES, "Módulo 1");
-  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, a.ok ? a.id : "");
-  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, b.ok ? b.id : "");
-  await placeClass(db, admin, (await getPensum(db, PILATES))[0].id, b.ok ? b.id : ""); // Marketing está en las dos
-  for (const c of [a, b]) await addClassSessions(db, t1, { classId: c.ok ? c.id : "", title: "", ...FUTURE, weeks: 1, location: null, onlineUrl: null });
-  const range = ["2099-03-01T05:00:00.000Z", "2099-04-01T05:00:00.000Z"] as const;
-
-  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).length, 0, "sin inscripción no ve nada");
-  const hathaEnrollment = await enroll(db, stu.id, HATHA);
-  await enroll(db, stu.id, PILATES);
-  assert.deepEqual((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).map((s) => s.class_title).sort(), ["Anatomía", "Marketing"]);
-  assert.deepEqual((await getStudentSessionsBetween(db, stu.id, PILATES, ...range)).map((s) => s.class_title), ["Marketing"]);
-  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, "2099-05-01T05:00:00.000Z", "2099-06-01T05:00:00.000Z")).length, 0, "otro mes");
-  await setCourseCompleted(db, admin, hathaEnrollment, true);
-  assert.equal((await getStudentSessionsBetween(db, stu.id, HATHA, ...range)).length, 0, "curso terminado: ya no tiene clases");
-});
-
-// ---------------------------------------------------------------- Anatomía y biomecánica (Alexa): temario por clases con horario propio
-
-import { addLesson, deleteLesson, getClassLessons, scheduleLesson } from "./classes.ts";
-
-const ANATOMIA = "Anatomía y biomecánica del yoga";
-
-async function anatomiaClass(db: Db) {
-  const row = (await listClasses(db)).find((c) => c.title === ANATOMIA)!;
-  return row;
-}
-
-test("el pensum de Hatha trae «Anatomía y biomecánica del yoga» con 8 clases y su docente prevista", async () => {
-  const { db } = await classesSetup();
-  await getPensum(db, HATHA);
-  const c = await anatomiaClass(db);
-  assert.equal(c.teacher_id, null);
-  const lessons = await getClassLessons(db, c.id);
-  assert.equal(lessons.length, 8);
-  assert.match(lessons[0].title, /^Clase 1/);
-  assert.match(lessons[7].title, /^Clase 8/);
-  assert.ok(lessons[6].topics.includes("Respiración consciente"));
-  assert.ok(lessons.every((l) => l.starts_at === null), "sin horario hasta que la docente lo ponga");
-});
-
-test("al crear la cuenta de Alexa, la clase de Anatomía queda a su nombre", async () => {
-  const { db } = await classesSetup();
-  await getPensum(db, HATHA);
-  assert.equal((await anatomiaClass(db)).teacher_id, null);
-  assert.equal((await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Alexa Pabón", email: "Alexa24alexa10@gmail.com", role: "teacher" }, "http://localhost:3000")).ok, true);
-  const c = await anatomiaClass(db);
-  assert.equal(c.teacher_name, "Alexa Pabón");
-  assert.equal(c.teacher_id !== null, true);
-});
-
-test("la docente le pone horario a cada clase del temario; una sola vez por clase y solo ella", async () => {
-  const { db, t2, stu, admin } = await classesSetup();
-  await getPensum(db, HATHA);
-  const alexa = await createUser(db, { cedula: "9", fullName: "Alexa", email: "alexa24alexa10@gmail.com", role: "teacher", password: "Correcta123" });
-  await db.run("UPDATE classes SET teacher_id = ? WHERE title = ?", [alexa.id, ANATOMIA]);
-  const c = await anatomiaClass(db);
-  const [l1, l2] = await getClassLessons(db, c.id);
-  const at = { startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: "", onlineUrl: "https://meet.google.com/abc-defg-hij" };
-
-  assert.equal((await scheduleLesson(db, t2, { lessonId: l1.id, ...at })).ok, false, "otra docente no puede");
-  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at, onlineUrl: "" })).ok, false, "virtual pide el enlace");
-  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at, endsAt: at.startsAt })).ok, false);
-  assert.deepEqual(await scheduleLesson(db, alexa, { lessonId: l1.id, ...at }), { ok: true });
-  assert.equal((await scheduleLesson(db, alexa, { lessonId: l1.id, ...at })).ok, false, "ya tiene horario");
-  assert.deepEqual(await scheduleLesson(db, alexa, { lessonId: l2.id, ...at, startsAt: "2099-03-09T23:00:00.000Z", endsAt: "2099-03-10T01:00:00.000Z" }), { ok: true });
-
-  const lessons = await getClassLessons(db, c.id);
-  assert.equal(lessons.filter((l) => l.starts_at).length, 2);
-  // la estudiante de Hatha ve la clase con los temas del encuentro
+test("una docente adicional ve la asignatura, programa horarios y marca resultados; una suplente sin permiso de aprobar no puede calificar", async () => {
+  const { db, admin, t1, t2, stu } = await classesSetup();
+  const made = await createClass(db, t1, { title: "Meditaciones", modality: "virtual", description: "" });
+  const classId = made.ok ? made.id : "";
+  await db.run("INSERT INTO class_teachers (class_id, user_id) VALUES (?, ?)", [classId, t2.id]);
+  await placeClass(db, admin, (await getPensum(db, HATHA))[0].id, classId);
   await enroll(db, stu.id, HATHA);
-  const mine = await getStudentSessions(db, stu.id);
-  assert.equal(mine.length, 2);
-  assert.match(mine[0].lesson_topics ?? "", /Concepto de cuerpo/);
-  assert.equal(mine[0].title, l1.title);
-  // quitar una clase del temario borra su horario
-  assert.equal((await deleteLesson(db, t2, l2.id)).ok, false);
-  assert.equal((await deleteLesson(db, alexa, l2.id)).ok, true);
-  assert.equal((await getStudentSessions(db, stu.id)).length, 1);
-  assert.equal((await addLesson(db, alexa, c.id, "Clase 9: Repaso", "Tema A\nTema B")).ok, true);
-  assert.equal((await getClassLessons(db, c.id)).length, 8);
-  void admin;
+  assert.equal((await byTitle(db, "Meditaciones")).teacher_name, "Docente Uno y Docente Dos");
+  assert.deepEqual((await getTeacherClasses(db, t2.id)).map((c) => c.title), ["Meditaciones"]);
+  await cycle(db, t2);
+  assert.deepEqual(await addClassSessions(db, t2, { classId, title: "", ...FUTURE, weeks: 1, location: null, onlineUrl: null }), { ok: true, created: 1 });
+  assert.equal((await getTeacherSessionsBetween(db, t2.id, "2099-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z")).length, 1);
+  assert.deepEqual(await setClassProgress(db, t2, classId, stu.id, "aprobado"), { ok: true });
+
+  assert.deepEqual(await setCanGrade(db, admin, t2.id, false), { ok: true });
+  assert.equal((await setCanGrade(db, t1, t2.id, true)).ok, false, "solo la administración");
+  const blocked = await setClassProgress(db, t2, classId, stu.id, "no_aprobado");
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.ok ? "" : blocked.error, /suplente/i);
+  assert.deepEqual(await setClassProgress(db, t1, classId, stu.id, "automatico"), { ok: true }, "la titular sí puede");
+  assert.equal((await deleteClass(db, t2, classId)).ok, false, "solo la titular borra");
 });
 
-// ---------------------------------------------------------------- Filosofía del yoga (Nitya): 3 módulos, 10 clases
-
-test("el pensum de Hatha trae Filosofía del yoga: 3 módulos y 10 clases de Nitya", async () => {
-  const { db } = await classesSetup();
-  const modules = await getPensum(db, HATHA);
-  const filo = modules.filter((m) => m.title.startsWith("Filosofía del yoga:"));
-  assert.deepEqual(filo.map((m) => m.classes.length), [2, 3, 5]);
-  assert.equal(modules[0].title, "Filosofía del yoga: Historia", "van primero");
-  const titles = filo.flatMap((m) => m.classes.map((c) => c.title));
-  assert.ok(titles.includes("Los 6 Darshanas") && titles.includes("Karma") && titles.includes("Gunas"));
-  assert.ok(filo.every((m) => m.classes.every((c) => c.teacher_id === null)), "sin cuenta aún, sin docente");
-  assert.equal(modules.some((m) => m.classes.some((c) => c.title === "Historia y filosofía")), false);
-});
-
-test("al crear la cuenta de Nitya, sus 10 clases quedan a su nombre y a nadie más", async () => {
-  const { db } = await classesSetup();
-  await getPensum(db, HATHA);
-  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Nitya", email: "Nitya.Portal@gmail.com", role: "teacher" }, "http://localhost:3000");
-  const mine = (await listClasses(db)).filter((c) => c.teacher_name === "Nitya");
-  assert.equal(mine.length, 10);
-  const alexa = (await listClasses(db)).find((c) => c.title === ANATOMIA)!;
-  assert.equal(alexa.teacher_id, null, "Anatomía sigue esperando a Alexa");
-});
-
-// ---------------------------------------------------------------- Laboratorio de asanas (Lila): 8 clases
-
-test("el pensum de Hatha trae el Laboratorio de asanas con 8 clases, y queda a nombre de Lila cuando exista su cuenta", async () => {
-  const { db } = await classesSetup();
-  await getPensum(db, HATHA);
-  const lab = (await listClasses(db)).find((c) => c.title === "Laboratorio de asanas")!;
-  assert.equal(lab.teacher_id, null);
-  const lessons = await getClassLessons(db, lab.id);
-  assert.deepEqual(lessons.map((l) => l.title.split(":")[0]), ["Clase 1", "Clase 2", "Clase 3", "Clase 4", "Clase 5", "Clase 6", "Clase 7", "Clase 8"]);
-  assert.match(lessons[5].title, /Rishikesh/);
-  assert.equal((await listClasses(db)).some((c) => c.title.startsWith("Asanas: alineación")), false);
-  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Lila Govardhan", email: "AcademicoFullnessCamp@fullnesscamp.com", role: "teacher" }, "http://localhost:3000");
-  assert.equal((await listClasses(db)).find((c) => c.title === "Laboratorio de asanas")!.teacher_name, "Lila Govardhan");
-});
-
-// ---------------------------------------------------------------- Fundamentos del yoga (Lila): 8 clases
-
-test("el pensum de Hatha trae Fundamentos del yoga (Lila, 8 clases) al inicio de su módulo, antes de Anatomía y el Laboratorio", async () => {
-  const { db } = await classesSetup();
-  const modules = await getPensum(db, HATHA);
-  const mod = modules.find((m) => m.title === "Fundamentos del yoga" && m.classes.length > 1)!;
-  assert.deepEqual(mod.classes.map((c) => c.title), ["Fundamentos del yoga", ANATOMIA, "Laboratorio de asanas"]);
-  const lessons = await getClassLessons(db, mod.classes[0].class_id);
-  assert.equal(lessons.length, 8);
-  assert.match(lessons[5].title, /Yoga Nidra/);
-  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Lila Govardhan", email: "academicofullnesscamp@fullnesscamp.com", role: "teacher" }, "http://localhost:3000");
-  const lila = (await listClasses(db)).filter((c) => c.teacher_name === "Lila Govardhan").map((c) => c.title).sort();
-  assert.deepEqual(lila, ["Ayurveda: parte de Lila", "Fundamentos del yoga", "Laboratorio de asanas"]);
-});
-
-// ---------------------------------------------------------------- Ayurveda: parte de Lila (4 clases)
-
-test("el pensum de Hatha trae la parte de Ayurveda de Lila (4 clases) y conserva los talleres de cocina", async () => {
-  const { db } = await classesSetup();
-  const modules = await getPensum(db, HATHA);
-  const mod = modules.find((m) => m.classes.some((c) => c.title === "Ayurveda: parte de Lila"))!;
-  assert.deepEqual(mod.classes.map((c) => c.title), ["Ayurveda: parte de Lila", "Ayurveda: parte de la Dra. Celi", "Taller de cocina ayurveda creativa 1", "Taller de cocina ayurveda creativa 2"]);
-  const lessons = await getClassLessons(db, mod.classes[0].class_id);
-  assert.deepEqual(lessons.map((l) => l.title), ["Clase 1: Generalidades del Ayurveda", "Clase 2: Dinacharya y Ratricharya", "Clase 3: Doshas", "Clase 4: Alimentación"]);
-  assert.equal((await listClasses(db)).some((c) => c.title === "Doshas y gunas"), false);
-});
-
-test("Ayurveda de la Dra. Celi: 7 clases, y queda a su nombre por el correo de su cuenta", async () => {
-  const { db } = await classesSetup();
-  const celi = (await getPensum(db, HATHA)).flatMap((m) => m.classes).find((c) => c.title === "Ayurveda: parte de la Dra. Celi")!;
-  const lessons = await getClassLessons(db, celi.class_id);
-  assert.equal(lessons.length, 7);
-  assert.match(lessons[1].title, /Rasayana/);
-  assert.match(lessons[6].title, /Climaterio/);
-  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Dra. Cely Arengas", email: "DraCelyMargarita@gmail.com", role: "teacher" }, "http://localhost:3000");
-  assert.equal((await listClasses(db)).find((c) => c.title === "Ayurveda: parte de la Dra. Celi")!.teacher_name, "Dra. Cely Arengas");
-});
-
-// ---------------------------------------------------------------- Marketing digital (Paula): 6 clases
-
-test("el pensum de Hatha trae Marketing digital (6 clases con tema y objetivo práctico) en «El yoga como camino de vida»", async () => {
-  const { db } = await classesSetup();
-  const mod = (await getPensum(db, HATHA)).find((m) => m.title === "El yoga como camino de vida")!;
-  const marketing = mod.classes.find((c) => c.title === "Marketing digital")!;
-  assert.ok(marketing, "va en ese módulo");
-  const lessons = await getClassLessons(db, marketing.class_id);
-  assert.equal(lessons.length, 6);
-  assert.deepEqual(lessons.map((l) => l.title.split(":")[1].trim()), ["Fundamentos", "Audiencia", "Contenido", "Ecosistema Meta", "Bases de pauta", "Lanzamiento"]);
-  assert.ok(lessons.every((l) => l.topics.length === 2 && l.topics[1].startsWith("Objetivo práctico:")));
-  // se asigna a la cuenta de Paula por su correo de administración
-  await createStaffAccount(db, { role: "admin" }, { cedula: "1010231015", fullName: "Paula Salazar", email: "noveltystudioscolombia@gmail.com", role: "admin" }, "http://localhost:3000");
-  assert.equal((await listClasses(db)).find((c) => c.title === "Marketing digital")!.teacher_name, "Paula Salazar");
-});
-
-// ---------------------------------------------------------------- avance de la estudiante: pendiente, en curso, aprobada
-
-import { getClassStudentsProgress, getStudentProgress, setClassProgress } from "./classes.ts";
+// ---- avance
 
 test("el avance es automático (pendiente antes del ciclo, en curso después) y solo la docente de la clase marca aprobada o no", async () => {
   const { db, admin, t1, t2, stu } = await classesSetup();
@@ -712,23 +730,22 @@ test("el avance es automático (pendiente antes del ciclo, en curso después) y 
   const [futura, empezada, tercera] = [await mk("Futura"), await mk("Empezada"), await mk("Tercera")];
   const mod = (await getPensum(db, HATHA))[0].id;
   for (const id of [futura, empezada, tercera]) await placeClass(db, admin, mod, id);
+  await cycle(db, t1);
   await addClassSessions(db, t1, { classId: futura, title: "", ...FUTURE, weeks: 1, location: null, onlineUrl: null });
   await addClassSessions(db, t1, { classId: empezada, title: "", startsAt: "2020-01-07T23:00:00.000Z", endsAt: "2020-01-08T01:00:00.000Z", weeks: 1, location: null, onlineUrl: null });
   await enroll(db, stu.id, HATHA);
 
-  const status = async (title: string, userId = stu.id) =>
-    (await getStudentProgress(db, userId, HATHA)).modules.flatMap((m) => m.classes).find((c) => c.title === title)!;
+  const status = async (title: string, userId = stu.id) => (await getStudentProgress(db, userId, HATHA)).modules.flatMap((m) => m.classes).find((c) => c.title === title)!;
   assert.equal((await status("Futura")).status, "pendiente");
-  assert.equal((await status("Empezada")).status, "en_curso", "empezó su ciclo: en curso por defecto");
-  assert.equal((await status("Tercera")).status, "pendiente", "sin fechas: pendiente");
-  assert.ok((await status("Futura")).cycle_start, "muestra cuándo inicia su ciclo");
+  assert.equal((await status("Empezada")).status, "en_curso");
+  assert.equal((await status("Tercera")).status, "pendiente");
+  assert.ok((await status("Futura")).cycle_start);
 
-  // solo la docente de la clase, y solo a estudiantes inscritas en una certificación con esa clase
   assert.equal((await setClassProgress(db, t2, empezada, stu.id, "aprobado")).ok, false, "otra docente no puede");
-  assert.equal((await setClassProgress(db, admin, empezada, stu.id, "aprobado")).ok, false, "ni siquiera la administración");
+  assert.equal((await setClassProgress(db, admin, empezada, stu.id, "aprobado")).ok, false, "ni la administración");
   assert.equal((await setClassProgress(db, stu, empezada, stu.id, "aprobado")).ok, false, "ni la estudiante");
   assert.equal((await setClassProgress(db, t1, empezada, stu2.id, "aprobado")).ok, false, "no inscrita");
-  assert.equal((await setClassProgress(db, t1, empezada, stu.id, "excelente")).ok, false, "estado inválido");
+  assert.equal((await setClassProgress(db, t1, empezada, stu.id, "excelente")).ok, false);
   assert.deepEqual(await setClassProgress(db, t1, empezada, stu.id, "aprobado"), { ok: true });
   assert.deepEqual(await setClassProgress(db, t1, futura, stu.id, "no_aprobado"), { ok: true });
   assert.equal((await status("Empezada")).status, "aprobado");
@@ -739,13 +756,99 @@ test("el avance es automático (pendiente antes del ciclo, en curso después) y 
   assert.equal(p.notApproved, 1);
   assert.equal(p.allApproved, false);
   assert.equal(p.total, p.approved + p.inCourse + p.pending + p.notApproved);
-
-  // la docente ve el estado de cada estudiante y puede volver a lo automático
   const roster = await getClassStudentsProgress(db, empezada);
   assert.deepEqual(roster.map((r) => [r.full_name, r.status, r.decided]), [["Estudiante", "aprobado", true]]);
   await setClassProgress(db, t1, empezada, stu.id, "automatico");
   assert.equal((await status("Empezada")).status, "en_curso");
+  void getClassStudents;
 });
+
+// ---- suplencias
+
+async function coverSetup() {
+  const s = await classesSetup();
+  const made = await createClass(s.db, s.t1, { title: "Marketing", modality: "virtual", description: "" });
+  const classId = made.ok ? made.id : "";
+  await placeClass(s.db, s.admin, (await getPensum(s.db, HATHA))[0].id, classId);
+  await cycle(s.db, s.t1);
+  await addClassSessions(s.db, s.t1, { classId, title: "", ...FUTURE, weeks: 2, location: null, onlineUrl: null });
+  await enroll(s.db, s.stu.id, HATHA);
+  return { ...s, classId };
+}
+
+test("suplencia: al aceptarla la clase cambia de docente, las estudiantes no reciben aviso y la nueva docente puede mover horarios", async () => {
+  const { db, t1, t2, stu, classId } = await coverSetup();
+  assert.equal((await requestCover(db, t2, classId, t1.id, "")).ok, false, "solo la docente de la clase la puede pedir");
+  assert.equal((await requestCover(db, t1, classId, t1.id, "")).ok, false, "no a sí misma");
+  assert.equal((await requestCover(db, t1, classId, stu.id, "")).ok, false, "no a una estudiante");
+  assert.deepEqual(await requestCover(db, t1, classId, t2.id, "Voy a viajar esas semanas"), { ok: true });
+  assert.equal((await requestCover(db, t1, classId, t2.id, "")).ok, false, "una sola solicitud pendiente por clase");
+
+  const inbox = await incomingCoverRequests(db, t2.id);
+  assert.equal(inbox.length, 1);
+  assert.equal(await notifCount(db, t2.id), 1);
+
+  const studentBefore = await notifCount(db, stu.id);
+  assert.equal((await respondCover(db, t1, inbox[0].id, true)).ok, false);
+  assert.deepEqual(await respondCover(db, t2, inbox[0].id, true), { ok: true });
+  assert.equal((await byTitle(db, "Marketing")).teacher_name, "Docente Dos");
+  assert.equal(await notifCount(db, stu.id), studentBefore, "las estudiantes NO reciben aviso del cambio de docente");
+  assert.equal(await notifCount(db, t1.id), 1);
+  assert.equal((await respondCover(db, t2, inbox[0].id, true)).ok, false);
+
+  // sus horarios no desaparecen cuando la docente anterior abre otro ciclo
+  await cycle(db, t1, new Date("2099-08-10T15:00:00Z"));
+  const [first] = await getStudentSessions(db, stu.id);
+  assert.ok(first, "los horarios pasaron al ciclo de la nueva docente (o quedaron sueltos)");
+  assert.equal((await rescheduleSession(db, t1, { sessionId: first.id, startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: null, onlineUrl: null, status: "cancelled", reason: "Ya no es mía" })).ok, false);
+  const moved = await rescheduleSession(db, t2, { sessionId: first.id, startsAt: "2099-04-01T23:00:00.000Z", endsAt: "2099-04-02T01:00:00.000Z", location: null, onlineUrl: null, status: "scheduled", reason: "Nuevo horario" });
+  assert.deepEqual(moved, { ok: true, notified: 1 });
+  assert.equal(await notifCount(db, stu.id), studentBefore + 1, "el cambio de horario sí se avisa");
+});
+
+test("suplencia: una suplente sin permiso de aprobar queda como docente adicional y la titular conserva la nota", async () => {
+  const { db, admin, t1, t2, stu, classId } = await coverSetup();
+  await setCanGrade(db, admin, t2.id, false);
+  await requestCover(db, t1, classId, t2.id, "");
+  const [req] = await incomingCoverRequests(db, t2.id);
+  assert.deepEqual(await respondCover(db, t2, req.id, true), { ok: true });
+  const c = await byTitle(db, "Marketing");
+  assert.equal(c.teacher_id, t1.id, "la titular sigue siendo la misma");
+  assert.equal(c.teacher_name, "Docente Uno y Docente Dos");
+  assert.equal((await setClassProgress(db, t2, classId, stu.id, "aprobado")).ok, false);
+  assert.deepEqual(await setClassProgress(db, t1, classId, stu.id, "aprobado"), { ok: true });
+  assert.equal((await rescheduleSession(db, t2, { sessionId: (await getTeacherSessionsBetween(db, t2.id, "2099-01-01T00:00:00.000Z", "2100-01-01T00:00:00.000Z"))[0].id, startsAt: "2099-04-01T23:00:00.000Z", endsAt: "2099-04-02T01:00:00.000Z", location: null, onlineUrl: null, status: "scheduled", reason: "Cambio de la suplente" })).ok, true, "la suplente sí cambia horarios");
+});
+
+test("suplencia: rechazar o cancelar deja la clase como estaba; no se pide a docentes sin registro completo", async () => {
+  const { db, t1, t2, classId } = await coverSetup();
+  await requestCover(db, t1, classId, t2.id, "");
+  const [req] = await incomingCoverRequests(db, t2.id);
+  assert.deepEqual(await respondCover(db, t2, req.id, false), { ok: true });
+  assert.equal((await byTitle(db, "Marketing")).teacher_id, t1.id);
+  assert.equal(await notifCount(db, t1.id), 1);
+
+  await requestCover(db, t1, classId, t2.id, "");
+  const [again] = await incomingCoverRequests(db, t2.id);
+  assert.equal((await cancelCover(db, t2, again.id)).ok, false, "solo quien la envió la cancela");
+  assert.deepEqual(await cancelCover(db, t1, again.id), { ok: true });
+  assert.equal((await incomingCoverRequests(db, t2.id)).length, 0);
+
+  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Laura Pendiente", email: "laura@x.co", role: "teacher" }, "http://localhost:3000");
+  const names = (await listCoverCandidates(db, t1.id)).map((c) => c.full_name);
+  assert.ok(names.includes("Docente Dos") && !names.includes("Laura Pendiente") && !names.includes("Docente Uno"));
+});
+
+test("suplencia: si la clase cambió de docente mientras tanto, la solicitud se cancela al aceptar", async () => {
+  const { db, admin, t1, t2, classId } = await coverSetup();
+  await requestCover(db, t1, classId, t2.id, "");
+  const [req] = await incomingCoverRequests(db, t2.id);
+  await updateClass(db, admin, classId, { title: "Marketing", modality: "virtual", description: "", teacherId: admin.id });
+  assert.equal((await respondCover(db, t2, req.id, true)).ok, false);
+  assert.equal((await byTitle(db, "Marketing")).teacher_id, admin.id);
+});
+
+void addModule;
 
 // ---------------------------------------------------------------- aceptación del contrato y las políticas, con evidencia
 
@@ -820,76 +923,3 @@ test("si el programa empieza dentro de 5 días hábiles se pide el consentimient
   assert.equal(await startsWithinRetractWindow(db, ["certificacion-de-yoga-kids"]), false);
 });
 
-// ---------------------------------------------------------------- suplencias entre docentes
-
-import { cancelCover, incomingCoverRequests, listCoverCandidates, requestCover, respondCover } from "./covers.ts";
-
-async function coverSetup() {
-  const s = await classesSetup();
-  const made = await createClass(s.db, s.t1, { title: "Marketing", modality: "virtual", description: "" });
-  const classId = made.ok ? made.id : "";
-  await placeClass(s.db, s.admin, (await getPensum(s.db, HATHA))[0].id, classId);
-  await addClassSessions(s.db, s.t1, { classId, title: "", ...FUTURE, weeks: 2, location: null, onlineUrl: null });
-  await enroll(s.db, s.stu.id, HATHA);
-  return { ...s, classId };
-}
-
-const notifCount = async (db: Db, userId: string) => Number((await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ?", [userId]))?.n);
-
-test("suplencia: al aceptarla la clase cambia de docente, las estudiantes no reciben aviso y la nueva docente puede mover horarios", async () => {
-  const { db, t1, t2, stu, classId } = await coverSetup();
-  assert.equal((await requestCover(db, t2, classId, t1.id, "")).ok, false, "solo la docente de la clase la puede pedir");
-  assert.equal((await requestCover(db, t1, classId, t1.id, "")).ok, false, "no a sí misma");
-  assert.equal((await requestCover(db, t1, classId, stu.id, "")).ok, false, "no a una estudiante");
-  assert.deepEqual(await requestCover(db, t1, classId, t2.id, "Voy a viajar esas semanas"), { ok: true });
-  assert.equal((await requestCover(db, t1, classId, t2.id, "")).ok, false, "una sola solicitud pendiente por clase");
-
-  const inbox = await incomingCoverRequests(db, t2.id);
-  assert.equal(inbox.length, 1);
-  assert.equal(inbox[0].class_title, "Marketing");
-  assert.equal(await notifCount(db, t2.id), 1, "la docente recibe aviso en el campus");
-
-  const studentBefore = await notifCount(db, stu.id);
-  assert.equal((await respondCover(db, t1, inbox[0].id, true)).ok, false, "solo quien recibió puede responder");
-  assert.deepEqual(await respondCover(db, t2, inbox[0].id, true), { ok: true });
-  assert.equal((await listClasses(db)).find((c) => c.id === classId)!.teacher_name, "Docente Dos");
-  assert.equal(await notifCount(db, stu.id), studentBefore, "las estudiantes NO reciben aviso del cambio de docente");
-  assert.equal(await notifCount(db, t1.id), 1, "quien la pidió sí se entera de que aceptó");
-  assert.equal((await respondCover(db, t2, inbox[0].id, true)).ok, false, "no se puede responder dos veces");
-
-  // la nueva docente cambia un horario: eso SÍ se avisa a las estudiantes; la anterior ya no puede
-  const [first] = await getStudentSessions(db, stu.id);
-  assert.equal((await rescheduleSession(db, t1, { sessionId: first.id, startsAt: FUTURE.startsAt, endsAt: FUTURE.endsAt, location: null, onlineUrl: null, status: "cancelled", reason: "Ya no es mía" })).ok, false);
-  const moved = await rescheduleSession(db, t2, { sessionId: first.id, startsAt: "2099-04-01T23:00:00.000Z", endsAt: "2099-04-02T01:00:00.000Z", location: null, onlineUrl: null, status: "scheduled", reason: "Nuevo horario" });
-  assert.deepEqual(moved, { ok: true, notified: 1 });
-  assert.equal(await notifCount(db, stu.id), studentBefore + 1);
-});
-
-test("suplencia: rechazar o cancelar deja la clase como estaba; no se pide a docentes sin registro completo", async () => {
-  const { db, t1, t2, classId } = await coverSetup();
-  await requestCover(db, t1, classId, t2.id, "");
-  const [req] = await incomingCoverRequests(db, t2.id);
-  assert.deepEqual(await respondCover(db, t2, req.id, false), { ok: true });
-  assert.equal((await listClasses(db)).find((c) => c.id === classId)!.teacher_id, t1.id);
-  assert.equal(await notifCount(db, t1.id), 1);
-
-  await requestCover(db, t1, classId, t2.id, "");
-  const [again] = await incomingCoverRequests(db, t2.id);
-  assert.equal((await cancelCover(db, t2, again.id)).ok, false, "solo quien la envió la cancela");
-  assert.deepEqual(await cancelCover(db, t1, again.id), { ok: true });
-  assert.equal((await incomingCoverRequests(db, t2.id)).length, 0);
-
-  // docente invitada que aún no completa su registro: no aparece como candidata
-  await createStaffAccount(db, { role: "admin" }, { cedula: null, fullName: "Laura Pendiente", email: "laura@x.co", role: "teacher" }, "http://localhost:3000");
-  const names = (await listCoverCandidates(db, t1.id)).map((c) => c.full_name);
-  assert.ok(names.includes("Docente Dos") && !names.includes("Laura Pendiente") && !names.includes("Docente Uno"));
-});
-
-test("suplencia: si la clase cambió de docente mientras tanto, la solicitud se cancela al aceptar", async () => {
-  const { db, admin, t1, t2, classId } = await coverSetup();
-  await requestCover(db, t1, classId, t2.id, "");
-  const [req] = await incomingCoverRequests(db, t2.id);
-  await updateClass(db, admin, classId, { title: "Marketing", modality: "virtual", description: "", teacherId: admin.id });
-  assert.equal((await respondCover(db, t2, req.id, true)).ok, false);
-  assert.equal((await listClasses(db)).find((c) => c.id === classId)!.teacher_id, admin.id);
-});

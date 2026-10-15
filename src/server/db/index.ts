@@ -41,6 +41,13 @@ class SqliteDb implements Db {
     this.migrateToClasses();
     this.addColumnIfMissing("sessions", "lesson_id", "TEXT REFERENCES class_lessons (id) ON DELETE SET NULL");
     this.addColumnIfMissing("classes", "suggested_teacher_email", "TEXT");
+    this.addColumnIfMissing("classes", "suggested_coteacher_emails", "TEXT");
+    this.addColumnIfMissing("classes", "seed_key", "TEXT");
+    this.addColumnIfMissing("classes", "is_event", "INTEGER NOT NULL DEFAULT 0");
+    this.addColumnIfMissing("sessions", "cycle_id", "TEXT REFERENCES teacher_cycles (id) ON DELETE SET NULL");
+    this.addColumnIfMissing("users", "can_grade", "INTEGER NOT NULL DEFAULT 1");
+    this.raw.exec("CREATE UNIQUE INDEX IF NOT EXISTS classes_seed_key_idx ON classes (seed_key) WHERE seed_key IS NOT NULL");
+    this.raw.exec("CREATE INDEX IF NOT EXISTS sessions_cycle_idx ON sessions (cycle_id)");
     // Dentro de una transacción, "transaction" anidada solo ejecuta la función.
     this.txView = {
       all: (s, p) => this.all(s, p),

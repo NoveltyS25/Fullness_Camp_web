@@ -39,16 +39,16 @@ export default async function PlanDeEstudios(props: PageProps<"/campus/cursos/[s
         <p className="rounded-3xl border border-clay-soft bg-white p-8 text-center text-xl">El plan de estudios de este curso se está preparando.</p>
       ) : (
         <div className="space-y-8">
-          {modules.map((m, mi) => (
+          {modules.map((m) => (
             <section key={m.id} aria-labelledby={`m-${m.id}`} className="rounded-3xl border border-clay-soft bg-white p-5 sm:p-6">
-              <h2 id={`m-${m.id}`} className="mb-4 text-2xl font-bold text-clay-dark">Módulo {mi + 1}. {m.title}</h2>
+              <h2 id={`m-${m.id}`} className="mb-4 text-2xl font-bold text-clay-dark">{m.title}</h2>
               {m.classes.length === 0 ? (
                 <p className="text-muted">Aún no hay clases en este módulo.</p>
               ) : (
                 <ul className="divide-y divide-clay-soft">
                   {m.classes.map((c) => (
                     <li key={c.placement_id} className="py-3">
-                      <p className="text-lg font-medium">{c.title}</p>
+                      <p className="text-lg font-medium">{c.title}{c.is_event ? <span className="ml-2 rounded-full bg-clay-soft px-3 py-0.5 text-sm font-normal text-clay-dark">Retiro / taller presencial</span> : null}</p>
                       <p className="text-muted">
                         {c.teacher_name ?? "Docente por asignar"} · {MODALITIES[c.modality]}
                       </p>

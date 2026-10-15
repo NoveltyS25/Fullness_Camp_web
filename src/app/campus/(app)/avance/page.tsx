@@ -76,9 +76,9 @@ export default async function MiAvance(props: PageProps<"/campus/avance">) {
           {p.modules.length === 0 ? (
             <p className="rounded-3xl border border-clay-soft bg-white p-8 text-center text-xl">El plan de estudios de esta certificación se está preparando.</p>
           ) : (
-            p.modules.map((m, mi) => (
+            p.modules.map((m) => (
               <section key={m.id} aria-labelledby={`m-${m.id}`} className="rounded-3xl border border-clay-soft bg-white p-5 sm:p-6">
-                <h2 id={`m-${m.id}`} className="mb-3 text-xl font-bold text-clay-dark">Módulo {mi + 1}. {m.title}</h2>
+                <h2 id={`m-${m.id}`} className="mb-3 text-xl font-bold text-clay-dark">{m.title}</h2>
                 <ul className="divide-y divide-clay-soft">
                   {m.classes.map((c) => (
                     <li key={c.class_id} className="flex flex-wrap items-center justify-between gap-3 py-3">

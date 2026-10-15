@@ -2,7 +2,7 @@ import { emailContent, greeting, whatsappSummary, type ChangeContext, type Sessi
 import { newId, nowIso, type Db } from "./db/index.ts";
 import { sendEmail, sendWhatsapp } from "./outbox.ts";
 import { createSetupLink } from "./auth.ts";
-import { claimSuggestedClasses } from "./classes.ts";
+import { claimSuggestedClasses, CURRENT_SESSION, isClassTeacher, joinNames, TEACHER_NAMES_SQL } from "./classes.ts";
 import { generateTempPassword, hashPassword } from "./security.ts";
 import { manualAccountEmail } from "./templates.ts";
 import { findUserByCedula, PENDING_PREFIX, type Role, type User } from "./users.ts";
@@ -61,22 +61,29 @@ export interface SessionRow {
   contact_email: string | null;
   contact_phone: string | null;
   lesson_topics: string | null;
+  cycle_name: string | null;
 }
 
-const SESSION_SELECT = `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name,
-  c.description, tp.contact_email, tp.contact_phone, l.topics AS lesson_topics
-  FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id LEFT JOIN teacher_profiles tp ON tp.user_id = c.teacher_id LEFT JOIN class_lessons l ON l.id = s.lesson_id`;
+const SESSION_SELECT = `SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, ${TEACHER_NAMES_SQL} AS teacher_name,
+  c.description, tp.contact_email, tp.contact_phone, l.topics AS lesson_topics, cy.name AS cycle_name
+  FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN teacher_profiles tp ON tp.user_id = c.teacher_id LEFT JOIN class_lessons l ON l.id = s.lesson_id LEFT JOIN teacher_cycles cy ON cy.id = s.cycle_id`;
+
+const sessionRows = async (db: Db, sql: string, params: (string | number | null)[]): Promise<SessionRow[]> =>
+  (await db.all<SessionRow>(sql, params)).map((r) => ({ ...r, teacher_name: joinNames(r.teacher_name) }));
+
+/** Asignaturas que esta estudiante ya aprobó: sus horarios no se le muestran más. */
+const NOT_APPROVED = `NOT EXISTS (SELECT 1 FROM class_progress ap WHERE ap.user_id = ? AND ap.class_id = s.class_id AND ap.status = 'aprobado')`;
 
 /** Clases de las certificaciones en las que la estudiante tiene una inscripción activa (sin terminar). */
 const STUDENT_CLASSES = `SELECT mc.class_id FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id
   WHERE m.program_slug IN (SELECT program_slug FROM enrollments WHERE user_id = ? AND status = 'active' AND completed_at IS NULL)`;
 
 export function getStudentSessions(db: Db, userId: string): Promise<SessionRow[]> {
-  return db.all<SessionRow>(
+  return sessionRows(db, 
     `${SESSION_SELECT}
-     WHERE s.ends_at >= ? AND s.class_id IN (${STUDENT_CLASSES})
+     WHERE s.ends_at >= ? AND ${CURRENT_SESSION()} AND ${NOT_APPROVED} AND s.class_id IN (${STUDENT_CLASSES})
      ORDER BY s.starts_at LIMIT 80`,
-    [nowIso(), userId],
+    [nowIso(), userId, userId],
   );
 }
 
@@ -119,23 +126,24 @@ export async function updateProfile(
 
 /** Sesiones de las clases de UNA certificación en un rango (calendario de la estudiante). Exige inscripción activa y sin terminar. */
 export function getStudentSessionsBetween(db: Db, userId: string, programSlug: string, fromIso: string, toIso: string): Promise<SessionRow[]> {
-  return db.all<SessionRow>(
+  return sessionRows(db, 
     `${SESSION_SELECT}
      WHERE s.starts_at >= ? AND s.starts_at < ?
        AND EXISTS (SELECT 1 FROM enrollments e WHERE e.user_id = ? AND e.program_slug = ? AND e.status = 'active' AND e.completed_at IS NULL)
+       AND ${CURRENT_SESSION()} AND ${NOT_APPROVED}
        AND s.class_id IN (SELECT mc.class_id FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id WHERE m.program_slug = ?)
      ORDER BY s.starts_at`,
-    [fromIso, toIso, userId, programSlug, programSlug],
+    [fromIso, toIso, userId, programSlug, userId, programSlug],
   );
 }
 
 /** Sesiones de las clases que dicta esta persona, entre dos instantes (para el calendario mensual). */
 export function getTeacherSessionsBetween(db: Db, teacherId: string, fromIso: string, toIso: string): Promise<SessionRow[]> {
-  return db.all<SessionRow>(`${SESSION_SELECT} WHERE c.teacher_id = ? AND s.starts_at >= ? AND s.starts_at < ? ORDER BY s.starts_at`, [teacherId, fromIso, toIso]);
+  return sessionRows(db, `${SESSION_SELECT} WHERE (c.teacher_id = ? OR EXISTS (SELECT 1 FROM class_teachers ct WHERE ct.class_id = c.id AND ct.user_id = ?)) AND s.starts_at >= ? AND s.starts_at < ? ORDER BY s.starts_at`, [teacherId, teacherId, fromIso, toIso]);
 }
 
 export function getClassSessions(db: Db, classId: string, fromIso: string): Promise<SessionRow[]> {
-  return db.all<SessionRow>(`${SESSION_SELECT} WHERE s.class_id = ? AND s.ends_at >= ? ORDER BY s.starts_at LIMIT 120`, [classId, fromIso]);
+  return sessionRows(db, `${SESSION_SELECT} WHERE s.class_id = ? AND s.ends_at >= ? ORDER BY s.starts_at LIMIT 120`, [classId, fromIso]);
 }
 
 export interface EditableSession extends SessionRow {
@@ -144,10 +152,10 @@ export interface EditableSession extends SessionRow {
 
 /** Solo la docente de la clase o la administración pueden ver una sesión para cambiarla. */
 export async function getSessionForActor(db: Db, actor: Pick<User, "id" | "role">, sessionId: string): Promise<EditableSession | undefined> {
-  const row = await db.get<EditableSession>(`SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, t.full_name AS teacher_name, c.teacher_id, c.description, NULL AS contact_email, NULL AS contact_phone, NULL AS lesson_topics
-     FROM sessions s JOIN classes c ON c.id = s.class_id LEFT JOIN users t ON t.id = c.teacher_id WHERE s.id = ?`, [sessionId]);
+  const row = await db.get<EditableSession>(`SELECT s.id, s.title, s.starts_at, s.ends_at, s.location, s.online_url, s.status, s.class_id, c.title AS class_title, c.modality, ${TEACHER_NAMES_SQL} AS teacher_name, c.teacher_id, c.description, NULL AS contact_email, NULL AS contact_phone, NULL AS lesson_topics, NULL AS cycle_name
+     FROM sessions s JOIN classes c ON c.id = s.class_id WHERE s.id = ?`, [sessionId]);
   if (!row) return undefined;
-  return actor.role === "admin" || row.teacher_id === actor.id ? row : undefined;
+  return actor.role === "admin" || (await isClassTeacher(db, actor.id, row.class_id)) ? { ...row, teacher_name: joinNames(row.teacher_name) } : undefined;
 }
 
 /** Estudiantes activas que verán la clase (de todas las certificaciones que la incluyen). */
@@ -155,8 +163,9 @@ export async function countClassStudents(db: Db, classId: string): Promise<numbe
   const r = await db.get<{ n: number }>(
     `SELECT COUNT(DISTINCT e.user_id) AS n FROM enrollments e
      WHERE e.status = 'active' AND e.completed_at IS NULL
-       AND e.program_slug IN (SELECT m.program_slug FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id WHERE mc.class_id = ?)`,
-    [classId],
+       AND e.program_slug IN (SELECT m.program_slug FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id WHERE mc.class_id = ?)
+       AND NOT EXISTS (SELECT 1 FROM class_progress ap WHERE ap.user_id = e.user_id AND ap.class_id = ? AND ap.status = 'aprobado')`,
+    [classId, classId],
   );
   return Number(r?.n ?? 0);
 }
@@ -215,8 +224,8 @@ export async function rescheduleSession(db: Db, actor: Pick<User, "id" | "role">
          SELECT e.user_id FROM enrollments e
          WHERE e.status = 'active' AND e.completed_at IS NULL
            AND e.program_slug IN (SELECT m.program_slug FROM module_classes mc JOIN curriculum_modules m ON m.id = mc.module_id WHERE mc.class_id = ?)
-       )`,
-      [s.class_id],
+       ) AND NOT EXISTS (SELECT 1 FROM class_progress ap WHERE ap.user_id = u.id AND ap.class_id = ? AND ap.status = 'aprobado')`,
+      [s.class_id, s.class_id],
     );
     for (const st of students) {
       const notificationId = newId();
@@ -351,9 +360,16 @@ export function getCohort(db: Db, id: string): Promise<CohortRow | undefined> {
 }
 
 export function listStaff(db: Db) {
-  return db.all<{ id: string; cedula: string; full_name: string; email: string; role: Role }>(
-    "SELECT id, cedula, full_name, email, role FROM users WHERE role IN ('teacher', 'admin') ORDER BY full_name",
+  return db.all<{ id: string; cedula: string; full_name: string; email: string; role: Role; can_grade: number }>(
+    "SELECT id, cedula, full_name, email, role, can_grade FROM users WHERE role IN ('teacher', 'admin') ORDER BY full_name",
   );
+}
+
+/** Una docente suplente puede dar clases y cambiar horarios, pero no marcar a las estudiantes como aprobadas o no aprobadas. */
+export async function setCanGrade(db: Db, actor: Pick<User, "role">, userId: string, canGrade: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (actor.role !== "admin") return { ok: false, error: "Solo la administración cambia este permiso." };
+  const r = await db.run("UPDATE users SET can_grade = ? WHERE id = ? AND role IN ('teacher', 'admin')", [canGrade ? 1 : 0, userId]);
+  return r.changes > 0 ? { ok: true } : { ok: false, error: "No encontramos a esa docente." };
 }
 
 export async function createCohort(
